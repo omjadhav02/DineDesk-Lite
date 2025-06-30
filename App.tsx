@@ -6,7 +6,6 @@ export default function App() {
     <AppNavigator/>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
