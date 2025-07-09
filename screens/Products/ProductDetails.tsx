@@ -8,9 +8,9 @@ import {
   Alert,
   TouchableOpacity,
 } from 'react-native';
-import { RootStackParamList } from '../types/navigation';
+import { RootStackParamList } from '../../types/navigation';
 import { Feather } from '@expo/vector-icons';
-import { deleteProduct, getProductById } from '../db/db';
+import { deleteProduct, getProductById } from '../../db/product';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCallback, useState } from 'react';
 

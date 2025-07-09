@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import {
   Text,
   View,
@@ -8,17 +8,19 @@ import {
   Image,
   TouchableOpacity,
 } from 'react-native';
-import { Product } from '../types/Product';
-import { createTable, getAllProducts } from '../db/db';
+import { Product } from '../../types/Product';
+import { getAllProducts } from '../../db/product';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { RootStackParamList } from '../types/navigation';
+import { RootStackParamList } from '../../types/navigation';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Products'>;
 
 function ProductScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const navigation = useNavigation<NavigationProp>();
 
   // Fetch product list from DB
   const fetchProducts = async () => {
@@ -30,45 +32,53 @@ function ProductScreen() {
     }
   };
 
-  // Load once on mount: create table & fetch data
+  // Load once on mount
   useEffect(() => {
     const init = async () => {
-      await createTable();
       await fetchProducts();
       setLoading(false);
     };
     init();
   }, []);
 
-  // Refetch on screen focus (e.g. when coming back from AddProduct)
+  // Refetch on screen focus
   useFocusEffect(
     useCallback(() => {
       fetchProducts();
     }, [])
   );
 
-  const navigation = useNavigation<NavigationProp>()
+  // Header right button setup
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => navigation.navigate('AddProduct' as never)}
+          style={{ marginRight: 30 }}
+        >
+          <Ionicons name="add-circle-outline" size={26} color="#007bff" />
+        </TouchableOpacity>
+      ),
+      title: 'Products',
+    });
+  }, [navigation]);
 
-  // Render single product card
-  const renderItem = ({ item }: { item: Product }) => {
-  return (
-    <TouchableOpacity onPress={()=> navigation.navigate('ProductDetails', {product: item})}>
-    <View style={styles.card}>
-      <View style={styles.infoContainer}>
-        <View style={styles.textContainer}>
-          <Text style={styles.title}>{item.itemName}</Text>
-          <Text style={styles.price}>₹{item.price}</Text>
-          {item.description ? <Text style={styles.description}>{item.description}</Text> : null}
+  const renderItem = ({ item }: { item: Product }) => (
+    <TouchableOpacity onPress={() => navigation.navigate('ProductDetails', { product: item })}>
+      <View style={styles.card}>
+        <View style={styles.infoContainer}>
+          <View style={styles.textContainer}>
+            <Text style={styles.title}>{item.itemName}</Text>
+            <Text style={styles.price}>₹{item.price}</Text>
+            {item.description ? <Text style={styles.description}>{item.description}</Text> : null}
+          </View>
+          {item.imageUri ? (
+            <Image source={{ uri: item.imageUri }} style={styles.image} />
+          ) : null}
         </View>
-        {item.imageUri ? (
-          <Image source={{ uri: item.imageUri }} style={styles.image} />
-        ) : null}
       </View>
-    </View>
     </TouchableOpacity>
   );
-};
-
 
   if (loading) {
     return (
@@ -136,6 +146,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   infoContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -153,5 +164,4 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#eee',
   },
-
 });

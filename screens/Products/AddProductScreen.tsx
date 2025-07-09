@@ -13,9 +13,9 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { insertProduct, updateProduct } from '../db/db';
-import { RootStackParamList } from '../types/navigation';
-import { Product } from '../types/Product';
+import { insertProduct, updateProduct } from '../../db/product';
+import { RootStackParamList } from '../../types/navigation';
+import { Product } from '../../types/Product';
 
 type AddProductRouteProp = RouteProp<RootStackParamList, 'AddProduct'>
 
