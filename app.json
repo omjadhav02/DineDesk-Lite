@@ -4,11 +4,11 @@
     "slug": "DineDesk-Lite",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/m31.png",
+    "icon": "./assets/M_31.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/m31.png",
+      "image": "./assets/M_31.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
