@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { insertProduct, updateProduct } from '../../db/product';
 import { RootStackParamList } from '../../types/navigation';
@@ -19,21 +20,29 @@ import { Product } from '../../types/Product';
 
 type AddProductRouteProp = RouteProp<RootStackParamList, 'AddProduct'>
 
-
 const AddProductScreen = () => {
   const route = useRoute<AddProductRouteProp>();
   const editingProduct = route.params?.product;
   const navigation = useNavigation();
 
-  const [itemName, setItemName] = useState(editingProduct?.itemName ||'');
-  const [price, setPrice] = useState(editingProduct?.price?.toString() ||'');
-  const [description, setDescription] = useState(editingProduct?.description ||'');
+  const [itemName, setItemName] = useState(editingProduct?.itemName || '');
+  const [price, setPrice] = useState(editingProduct?.price?.toString() || '');
+  const [description, setDescription] = useState(editingProduct?.description || '');
   const [imageUri, setImageUri] = useState<string | null>(editingProduct?.imageUri || null);
+
+  const saveImagePermanently = async (uri: string, name: string): Promise<string> => {
+    const fileName = name.replace(/\s+/g, '_') + '_' + Date.now() + '.jpg';
+    const newPath = FileSystem.documentDirectory + fileName;
+    await FileSystem.copyAsync({ from: uri, to: newPath });
+    return newPath;
+  };
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.5 });
     if (!result.canceled && result.assets.length > 0) {
-      setImageUri(result.assets[0].uri);
+      const selectedUri = result.assets[0].uri;
+      const savedPath = await saveImagePermanently(selectedUri, itemName || 'product');
+      setImageUri(savedPath);
     }
   };
 
@@ -42,23 +51,21 @@ const AddProductScreen = () => {
       Alert.alert('Error', 'Product name and price are required!');
       return;
     }
+
     const parsedPrice = parseFloat(price);
 
     const productData: Product = {
       itemName,
       price: parsedPrice,
       description,
-      imageUri: imageUri ?? ''
-    }
+      imageUri: imageUri ?? '',
+    };
+
     try {
-      if(editingProduct?.id){
-        await updateProduct({...productData, id:editingProduct.id})
-        // Alert.alert('Updated','Product updated succesfully!')
-        
-      }else{
+      if (editingProduct?.id) {
+        await updateProduct({ ...productData, id: editingProduct.id });
+      } else {
         await insertProduct(productData);
-        // Alert.alert('Success','Product added successfully!')
-        
       }
       navigation.goBack();
     } catch (error) {
@@ -68,51 +75,51 @@ const AddProductScreen = () => {
   };
 
   return (
-    <KeyboardAvoidingView 
-        behavior={Platform.OS === 'android'? 'padding': 'height'}
-        style={{flex:1}}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'android' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
     >
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.label}>Image</Text>
-      <TouchableOpacity onPress={pickImage} style={styles.imagePicker}>
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} style={styles.image} />
-        ) : (
-          <Text style={styles.imagePlaceholder}>Tap to pick image</Text>
-        )}
-      </TouchableOpacity>
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.label}>Image</Text>
+        <TouchableOpacity onPress={pickImage} style={styles.imagePicker}>
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.image} />
+          ) : (
+            <Text style={styles.imagePlaceholder}>Tap to pick image</Text>
+          )}
+        </TouchableOpacity>
 
-      <Text style={styles.label}>Product Name</Text>
-      <TextInput
-        placeholder="Enter product name"
-        value={itemName}
-        onChangeText={setItemName}
-        style={styles.input}
-      />
+        <Text style={styles.label}>Product Name</Text>
+        <TextInput
+          placeholder="Enter product name"
+          value={itemName}
+          onChangeText={setItemName}
+          style={styles.input}
+        />
 
-      <Text style={styles.label}>Price (₹)</Text>
-      <TextInput
-        placeholder="Enter price"
-        value={price}
-        onChangeText={setPrice}
-        keyboardType="numeric"
-        style={styles.input}
-      />
+        <Text style={styles.label}>Price (₹)</Text>
+        <TextInput
+          placeholder="Enter price"
+          value={price}
+          onChangeText={setPrice}
+          keyboardType="numeric"
+          style={styles.input}
+        />
 
-      <Text style={styles.label}>Description</Text>
-      <TextInput
-        placeholder="Enter description"
-        value={description}
-        onChangeText={setDescription}
-        multiline
-        numberOfLines={3}
-        style={[styles.input, { height: 80 }]}
-      />
+        <Text style={styles.label}>Description</Text>
+        <TextInput
+          placeholder="Enter description"
+          value={description}
+          onChangeText={setDescription}
+          multiline
+          numberOfLines={3}
+          style={[styles.input, { height: 80 }]}
+        />
 
-      <TouchableOpacity style={styles.button} onPress={saveProduct}>
-        <Text style={styles.buttonText}>Save Product</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <TouchableOpacity style={styles.button} onPress={saveProduct}>
+          <Text style={styles.buttonText}>Save Product</Text>
+        </TouchableOpacity>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
