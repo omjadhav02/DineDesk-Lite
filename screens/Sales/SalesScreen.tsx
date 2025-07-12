@@ -17,6 +17,7 @@ import Graph from '../../components/Graph';
 const SalesScreen = () => {
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
+  const [graphMode, setGraphMode] = useState<'week' | 'month' | 'year'>('week');
   const [revenues, setRevenues] = useState({
     today: 0,
     weekly: 0,
@@ -76,7 +77,7 @@ const SalesScreen = () => {
     setLoading(false);
   };
 
-  const prepareLast7DaysData = (): { labels: string[]; data: number[] } => {
+  const prepareWeeklyData = (): { labels: string[]; data: number[] } => {
     const map = new Map<string, number>();
     const now = new Date();
 
@@ -100,9 +101,81 @@ const SalesScreen = () => {
     return { labels, data };
   };
 
+  const prepareMonthlyData = (): { labels: string[]; data: number[] } => {
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const map = new Map<string, number>();
+
+    for (let i = 1; i <= daysInMonth; i++) {
+      const label = i.toString();
+      map.set(label, 0);
+    }
+
+    sales.forEach(sale => {
+      const date = new Date(sale.timestamp);
+      if (
+        date.getFullYear() === now.getFullYear() &&
+        date.getMonth() === now.getMonth()
+      ) {
+        const key = date.getDate().toString();
+        if (map.has(key)) {
+          map.set(key, map.get(key)! + sale.totalPrice);
+        }
+      }
+    });
+
+    return {
+      labels: Array.from(map.keys()),
+      data: Array.from(map.values()),
+    };
+  };
+
+  const prepareYearlyData = (): { labels: string[]; data: number[] } => {
+    const map = new Map<string, number>();
+    const months = Array.from({ length: 12 }, (_, i) =>
+      new Date(0, i).toLocaleString('default', { month: 'short' })
+    );
+
+    months.forEach(m => map.set(m, 0));
+
+    sales.forEach(sale => {
+      const date = new Date(sale.timestamp);
+      if (date.getFullYear() === new Date().getFullYear()) {
+        const monthLabel = date.toLocaleString('default', { month: 'short' });
+        if (map.has(monthLabel)) {
+          map.set(monthLabel, map.get(monthLabel)! + sale.totalPrice);
+        }
+      }
+    });
+
+    return {
+      labels: Array.from(map.keys()),
+      data: Array.from(map.values()),
+    };
+  };
+
   useEffect(() => {
     fetchSales();
   }, [calculateRevenue]);
+
+  const getGraphData = () => {
+    switch (graphMode) {
+      case 'month':
+        return prepareMonthlyData();
+      case 'year':
+        return prepareYearlyData();
+      default:
+        return prepareWeeklyData();
+    }
+  };
+
+  const graphData = getGraphData();
+  const graphTitle =
+    graphMode === 'month'
+      ? 'Monthly Sales'
+      : graphMode === 'year'
+      ? 'Yearly Sales'
+      : 'Last 7 Days Sales';
 
   if (loading) {
     return (
@@ -112,8 +185,6 @@ const SalesScreen = () => {
       </View>
     );
   }
-
-  const graphData = prepareLast7DaysData();
 
   return (
     <ScrollView style={styles.container}>
@@ -155,13 +226,32 @@ const SalesScreen = () => {
             <Text style={styles.revenueValue}>₹{revenues.yearly.toFixed(2)}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* 🔽 Toggle Buttons */}
+        <View style={styles.toggleRow}>
+          {['week', 'month', 'year'].map(mode => (
+            <TouchableOpacity
+              key={mode}
+              onPress={() => setGraphMode(mode as 'week' | 'month' | 'year')}
+              style={[
+                styles.toggleBtn,
+                graphMode === mode && styles.toggleBtnActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.toggleText,
+                  graphMode === mode && styles.toggleTextActive,
+                ]}
+              >
+                {mode.charAt(0).toUpperCase() + mode.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
-      <Graph
-        title="Last 7 Days Sales"
-        labels={graphData.labels}
-        data={graphData.data}
-      />
+      <Graph title={graphTitle} labels={graphData.labels} data={graphData.data} />
     </ScrollView>
   );
 };
@@ -182,10 +272,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
     elevation: 6,
   },
   headerTitle: {
@@ -218,5 +304,28 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#003366',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 16,
+  },
+  toggleBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#007bff',
+  },
+  toggleBtnActive: {
+    backgroundColor: '#007bff',
+  },
+  toggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007bff',
+  },
+  toggleTextActive: {
+    color: '#fff',
   },
 });

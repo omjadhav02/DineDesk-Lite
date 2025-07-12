@@ -1,11 +1,10 @@
-// components/Graph.tsx
 import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   useWindowDimensions,
-  Platform,
+  ScrollView,
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 
@@ -17,7 +16,9 @@ interface GraphProps {
 
 const Graph: React.FC<GraphProps> = ({ title, labels, data }) => {
   const { width } = useWindowDimensions();
-  const chartWidth = width - 48;
+
+  // Increase chart width to allow spacing
+  const chartWidth = Math.max(width * 1.2, labels.length * 20);
 
   const [tooltipPos, setTooltipPos] = useState<{
     x: number;
@@ -34,76 +35,75 @@ const Graph: React.FC<GraphProps> = ({ title, labels, data }) => {
         <Text style={styles.title}>{title}</Text>
       </View>
 
-      <LineChart
-        data={{
-          labels,
-          datasets: [
-            {
-              data,
-              strokeWidth: 2,
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <LineChart
+          data={{
+            labels,
+            datasets: [
+              {
+                data,
+                strokeWidth: 2,
+              },
+            ],
+          }}
+          width={chartWidth}
+          height={240}
+          yAxisLabel="₹"
+          chartConfig={{
+            backgroundColor: '#fff',
+            backgroundGradientFrom: '#fff',
+            backgroundGradientTo: '#fff',
+            decimalPlaces: 2,
+            color: (opacity = 1) => `rgba(0, 123, 255, ${opacity})`,
+            labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+            propsForDots: {
+              r: '3',
+              strokeWidth: '2',
+              stroke: '#007bff',
+              fill: '#007bff',
             },
-          ],
-        }}
-        width={chartWidth}
-        height={240}
-        yAxisLabel="₹"
-        chartConfig={{
-          backgroundColor: '#fff',
-          backgroundGradientFrom: '#fff',
-          backgroundGradientTo: '#fff',
-          decimalPlaces: 2,
-          color: (opacity = 1) => `rgba(0, 123, 255, ${opacity})`,
-          labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-          style: {
+          }}
+          bezier
+          onDataPointClick={(dataPoint) => {
+            const isSamePoint =
+              tooltipPos.x === dataPoint.x && tooltipPos.y === dataPoint.y;
+            isSamePoint
+              ? setTooltipPos((prev) => ({ ...prev, visible: !prev.visible }))
+              : setTooltipPos({
+                  x: dataPoint.x,
+                  y: dataPoint.y,
+                  value: dataPoint.value,
+                  label: labels[dataPoint.index],
+                  visible: true,
+                });
+          }}
+          decorator={() => {
+            return tooltipPos.visible ? (
+              <View
+                style={{
+                  position: 'absolute',
+                  top: tooltipPos.y - 30,
+                  left: tooltipPos.x - 40,
+                  backgroundColor: '#007bff',
+                  paddingVertical: 4,
+                  paddingHorizontal: 8,
+                  borderRadius: 8,
+                  zIndex: 99,
+                }}
+              >
+                <Text style={{ color: '#fff', fontSize: 13 }}>
+                  {tooltipPos.label}: ₹{tooltipPos.value.toFixed(2)}
+                </Text>
+              </View>
+            ) : null;
+          }}
+          style={{
+            marginTop: 8,
             borderRadius: 16,
-          },
-          propsForDots: {
-            r: '5',
-            strokeWidth: '2',
-            stroke: '#007bff',
-            fill: '#007bff',
-          },
-        }}
-        bezier
-        onDataPointClick={(dataPoint) => {
-          let isSamePoint =
-            tooltipPos.x === dataPoint.x && tooltipPos.y === dataPoint.y;
-          isSamePoint
-            ? setTooltipPos((prev) => ({ ...prev, visible: !prev.visible }))
-            : setTooltipPos({
-                x: dataPoint.x,
-                y: dataPoint.y,
-                value: dataPoint.value,
-                label: labels[dataPoint.index],
-                visible: true,
-              });
-        }}
-        decorator={() => {
-          return tooltipPos.visible ? (
-            <View
-              style={{
-                position: 'absolute',
-                top: tooltipPos.y - 30,
-                left: tooltipPos.x - 40,
-                backgroundColor: '#007bff',
-                paddingVertical: 4,
-                paddingHorizontal: 8,
-                borderRadius: 8,
-                zIndex: 99,
-              }}
-            >
-              <Text style={{ color: '#fff', fontSize: 12 }}>
-                {tooltipPos.label}: ₹{tooltipPos.value.toFixed(2)}
-              </Text>
-            </View>
-          ) : null;
-        }}
-        style={{
-          marginTop: 8,
-          borderRadius: 16,
-          alignSelf: 'center',
-        }}
-      />
+            alignSelf: 'center',
+          }}
+        />
+      </ScrollView>
     </View>
   );
 };

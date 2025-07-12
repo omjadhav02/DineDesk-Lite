@@ -1,4 +1,3 @@
-// screens/YearSalesScreen.tsx
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -8,9 +7,12 @@ import {
   ActivityIndicator,
   Alert,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { getAllSales } from '../../db/sales';
+import { getAllProducts } from '../../db/product';
 import { Sale, MonthlySummary } from '../../types/Sale';
+import { Product } from '../../types/Product';
 import { Ionicons } from '@expo/vector-icons';
 import { generateYearlySalesPDF, generateMonthlySalesPDF } from '../../components/PDFGenerator';
 import * as Sharing from 'expo-sharing';
@@ -20,6 +22,9 @@ const YearSalesScreen = () => {
   const [allSales, setAllSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalYearlyRevenue, setTotalYearlyRevenue] = useState(0);
+  const [topProducts, setTopProducts] = useState<
+    { itemName: string; quantity: number; imageUri?: string }[]
+  >([]);
 
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -55,17 +60,20 @@ const YearSalesScreen = () => {
     const fetchYearlySales = async () => {
       try {
         setLoading(true);
-        const sales: Sale[] = await getAllSales();
+        const [sales, products] = await Promise.all([getAllSales(), getAllProducts()]);
         setAllSales(sales);
 
         const monthMap: { [key: string]: MonthlySummary } = {};
         let revenueSum = 0;
 
+        const productMap: Record<string, Product> = {};
+        products.forEach(p => productMap[p.itemName] = p);
+
+        const countMap: Record<string, number> = {};
+
         sales.forEach((sale) => {
           const date = new Date(sale.timestamp);
-          const year = date.getFullYear();
-
-          if (year === currentYear) {
+          if (date.getFullYear() === currentYear) {
             const monthKey = date.toLocaleString('default', {
               month: 'long',
               year: 'numeric',
@@ -84,15 +92,29 @@ const YearSalesScreen = () => {
             monthMap[monthKey].totalItems += sale.totalItems;
             monthMap[monthKey].totalRevenue += sale.totalPrice;
             revenueSum += sale.totalPrice;
+
+            sale.items.forEach(item => {
+              countMap[item.itemName] = (countMap[item.itemName] || 0) + item.quantity;
+            });
           }
         });
 
-        const sortedSummaries = Object.values(monthMap).sort(
-          (a, b) => new Date(a.month).getMonth() - new Date(b.month).getMonth()
-        );
+        const sortedTop = Object.entries(countMap)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([itemName, quantity]) => ({
+            itemName,
+            quantity,
+            imageUri: productMap[itemName]?.imageUri,
+          }));
 
-        setMonthlySummaries(sortedSummaries);
+        setMonthlySummaries(
+          Object.values(monthMap).sort(
+            (a, b) => new Date(a.month).getMonth() - new Date(b.month).getMonth()
+          )
+        );
         setTotalYearlyRevenue(revenueSum);
+        setTopProducts(sortedTop);
       } catch (error) {
         console.error('Error fetching yearly sales:', error);
         Alert.alert('Error', 'Failed to load yearly sales.');
@@ -138,6 +160,30 @@ const YearSalesScreen = () => {
         </TouchableOpacity>
       </View>
 
+      {/* 🔥 Top 3 Most Sold Products */}
+      {topProducts.length > 0 && (
+        <View style={{ marginHorizontal: 16, marginBottom: 10 }}>
+          {topProducts.map((prod, index) => (
+            <View key={index} style={styles.mostSoldCard}>
+              {prod.imageUri ? (
+                <Image source={{ uri: prod.imageUri }} style={styles.productImage} />
+              ) : (
+                <View style={[styles.productImage, styles.noImage]}>
+                  <Text style={styles.noImageText}>No Image</Text>
+                </View>
+              )}
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={styles.mostSoldTitle}>
+                  🔥 {index === 0 ? 'Most Sold' : index === 1 ? '2nd Most' : '3rd Most'} This Year
+                </Text>
+                <Text style={styles.mostSoldName}>{prod.itemName}</Text>
+                <Text style={styles.mostSoldQty}>Sold: {prod.quantity} times</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
       <FlatList
         data={monthlySummaries}
         keyExtractor={(_, index) => index.toString()}
@@ -174,7 +220,7 @@ const styles = StyleSheet.create({
     elevation: 4,
     flexDirection: 'row',
   },
-  monthText: {
+  yearText: {
     fontSize: 18,
     fontWeight: '700',
     color: '#333',
@@ -241,9 +287,43 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
-  yearText: {
-    fontSize: 18,
+  mostSoldCard: {
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    marginBottom: 8,
+    borderRadius: 12,
+    elevation: 2,
+  },
+  productImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#eee',
+  },
+  noImage: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noImageText: {
+    color: '#aaa',
+    fontSize: 12,
+  },
+  mostSoldTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+  },
+  mostSoldName: {
+    fontSize: 16,
     fontWeight: '700',
-    color: '#333',
+    color: '#222',
+  },
+  mostSoldQty: {
+    fontSize: 14,
+    color: '#007bff',
+    fontWeight: '600',
+    marginTop: 4,
   },
 });

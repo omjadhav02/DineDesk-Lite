@@ -7,9 +7,12 @@ import {
   ActivityIndicator,
   Alert,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { getAllSales } from '../../db/sales';
+import { getAllProducts } from '../../db/product';
 import { Sale } from '../../types/Sale';
+import { Product } from '../../types/Product';
 import { Ionicons } from '@expo/vector-icons';
 import {
   generateSingleDaySalesPDF,
@@ -31,6 +34,9 @@ const WeekSalesScreen = () => {
   const [weeklySales, setWeeklySales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalWeeklyRevenue, setTotalWeeklyRevenue] = useState(0);
+  const [topProducts, setTopProducts] = useState<
+    { itemName: string; quantity: number; imageUri?: string }[]
+  >([]);
 
   const now = new Date();
   const weekLabel = `Week of ${now.toLocaleDateString('en-GB', {
@@ -60,7 +66,11 @@ const WeekSalesScreen = () => {
     const fetchWeeklySales = async () => {
       try {
         setLoading(true);
-        const allSales = await getAllSales();
+
+        const [allSales, allProducts] = await Promise.all([
+          getAllSales(),
+          getAllProducts(),
+        ]);
 
         const today = new Date();
         const startOfWeek = new Date(today);
@@ -107,6 +117,29 @@ const WeekSalesScreen = () => {
         setWeeklySales(filteredSales);
         setDailySummaries(sortedSummaries);
         setTotalWeeklyRevenue(revenueSum);
+
+        // ✅ Calculate top 3 most sold products
+        const productMap: Record<string, Product> = {};
+        allProducts.forEach((p) => (productMap[p.itemName] = p));
+
+        const countMap: { [key: string]: number } = {};
+        filteredSales.forEach((sale) => {
+          sale.items.forEach((item) => {
+            countMap[item.itemName] =
+              (countMap[item.itemName] ?? 0) + item.quantity;
+          });
+        });
+
+        const sortedTop = Object.entries(countMap)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([itemName, quantity]) => ({
+            itemName,
+            quantity,
+            imageUri: productMap[itemName]?.imageUri,
+          }));
+
+        setTopProducts(sortedTop);
       } catch (error) {
         console.error('Error fetching weekly sales:', error);
         Alert.alert('Error', 'Failed to load weekly sales.');
@@ -147,7 +180,6 @@ const WeekSalesScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* 🔺 Week Heading */}
       <View style={styles.header}>
         <Ionicons name="calendar-outline" size={24} color="#007bff" style={{ marginRight: 8 }} />
         <Text style={styles.monthText}>{weekLabel}</Text>
@@ -155,6 +187,30 @@ const WeekSalesScreen = () => {
           <Ionicons name="document-text" size={22} color="#007bff" />
         </TouchableOpacity>
       </View>
+
+      {/* ✅ Top 3 Products Card */}
+      {topProducts.length > 0 && (
+        <View style={{ marginHorizontal: 16, marginBottom: 10 }}>
+          {topProducts.map((prod, index) => (
+            <View key={index} style={styles.mostSoldCard}>
+              {prod.imageUri ? (
+                <Image source={{ uri: prod.imageUri }} style={styles.productImage} />
+              ) : (
+                <View style={[styles.productImage, { justifyContent: 'center', alignItems: 'center' }]}>
+                  <Text style={{ color: '#aaa', fontSize: 12 }}>No Image</Text>
+                </View>
+              )}
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={styles.mostSoldTitle}>
+                  🔥 {index === 0 ? 'Most Sold' : index === 1 ? '2nd Most' : '3rd Most'} This Week
+                </Text>
+                <Text style={styles.mostSoldName}>{prod.itemName}</Text>
+                <Text style={styles.mostSoldQty}>Sold: {prod.quantity} times</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
 
       <FlatList
         data={dailySummaries}
@@ -166,7 +222,6 @@ const WeekSalesScreen = () => {
         }
       />
 
-      {/* 🔻 Bottom Tab */}
       <View style={styles.totalBar}>
         <Text style={styles.totalLabel}>Total Weekly Revenue</Text>
         <Text style={styles.totalValue}>₹{totalWeeklyRevenue.toFixed(2)}</Text>
@@ -178,10 +233,7 @@ const WeekSalesScreen = () => {
 export default WeekSalesScreen;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9f9f9',
-  },
+  container: { flex: 1, backgroundColor: '#f9f9f9' },
   header: {
     backgroundColor: '#fff',
     paddingVertical: 14,
@@ -263,5 +315,36 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '700',
+  },
+  mostSoldCard: {
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    marginBottom: 8,
+    borderRadius: 12,
+    elevation: 2,
+  },
+  productImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#eee',
+  },
+  mostSoldTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+  },
+  mostSoldName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#222',
+  },
+  mostSoldQty: {
+    fontSize: 14,
+    color: '#007bff',
+    fontWeight: '600',
+    marginTop: 4,
   },
 });

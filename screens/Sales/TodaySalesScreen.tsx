@@ -1,4 +1,3 @@
-// TodaySalesScreen.tsx
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -8,10 +7,12 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Alert,
+  Image,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { getAllSales, deleteSingleSale } from '../../db/sales';
+import { getAllProducts } from '../../db/product';
 import { Sale } from '../../types/Sale';
+import { Product } from '../../types/Product';
 import { generateTodaySalesPDF } from '../../components/PDFGenerator';
 import * as Sharing from 'expo-sharing';
 
@@ -19,17 +20,23 @@ const TodaySalesScreen = () => {
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalToday, setTotalToday] = useState(0);
+  const [topProducts, setTopProducts] = useState<
+    { itemName: string; quantity: number; imageUri?: string }[]
+  >([]);
 
   useEffect(() => {
     const fetchTodaySales = async () => {
       try {
         setLoading(true);
-        const allSales = await getAllSales();
+
+        const [allSales, allProducts] = await Promise.all([
+          getAllSales(),
+          getAllProducts(),
+        ]);
 
         const today = new Date();
         const filtered = allSales.filter((sale) => {
           const saleDate = new Date(sale.timestamp);
-          // console.log('Sale Timestamp:', sale.timestamp, '| Parsed:', saleDate);
           return (
             saleDate.getDate() === today.getDate() &&
             saleDate.getMonth() === today.getMonth() &&
@@ -38,12 +45,35 @@ const TodaySalesScreen = () => {
         });
 
         const total = filtered.reduce((sum, sale) => sum + sale.totalPrice, 0);
-
         setSales(filtered);
         setTotalToday(total);
+
+        const productMap: Record<string, Product> = {};
+        allProducts.forEach((p) => {
+          productMap[p.itemName] = p;
+        });
+
+        const countMap: Record<string, number> = {};
+        filtered.forEach((sale) => {
+          sale.items.forEach((item) => {
+            countMap[item.itemName] =
+              (countMap[item.itemName] ?? 0) + item.quantity;
+          });
+        });
+
+        const sorted = Object.entries(countMap)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([itemName, quantity]) => ({
+            itemName,
+            quantity,
+            imageUri: productMap[itemName]?.imageUri,
+          }));
+
+        setTopProducts(sorted);
       } catch (error) {
         console.error('Error fetching today sales:', error);
-        Alert.alert('Error', 'Failed to load today\'s sales.');
+        Alert.alert('Error', "Failed to load today's sales.");
       } finally {
         setLoading(false);
       }
@@ -52,19 +82,19 @@ const TodaySalesScreen = () => {
     fetchTodaySales();
   }, []);
 
-  const handleExportPDF = async () =>{
+  const handleExportPDF = async () => {
     try {
-      const uri = await generateTodaySalesPDF(sales,totalToday);
-      if(await Sharing.isAvailableAsync()){
+      const uri = await generateTodaySalesPDF(sales, totalToday);
+      if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri);
-      }else{
-        Alert.alert('PDF Saved','PDF saved at:\n'+uri)
+      } else {
+        Alert.alert('PDF Saved', 'PDF saved at:\n' + uri);
       }
     } catch (error) {
       console.error('PDF Error:', error);
       Alert.alert('Error', 'Failed to generate PDF.');
     }
-  }
+  };
 
   const handleDeleteSale = async (id: number) => {
     Alert.alert('Delete Sale', 'Are you sure you want to delete this sale?', [
@@ -108,7 +138,9 @@ const TodaySalesScreen = () => {
           <Text style={styles.productName}>
             {idx + 1}. {product.itemName} × {product.quantity}
           </Text>
-          <Text style={styles.productPrice}>₹{product.price * product.quantity}</Text>
+          <Text style={styles.productPrice}>
+            ₹{product.price * product.quantity}
+          </Text>
         </View>
       ))}
 
@@ -134,13 +166,32 @@ const TodaySalesScreen = () => {
     <View style={styles.container}>
       <View style={styles.headerRowWrap}>
         <Text style={styles.orderCount}>Total Orders: {sales.length}</Text>
-
         <TouchableOpacity onPress={handleExportPDF} style={styles.exportBtn}>
           <Text style={styles.exportBtnText}>Export PDF</Text>
         </TouchableOpacity>
       </View>
 
-
+      {/* Top 3 Most Sold Product Cards */}
+      {topProducts.length > 0 && (
+        <View style={{ paddingHorizontal: 16 }}>
+          {topProducts.map((product, index) => (
+            <View key={index} style={styles.mostSoldCard}>
+              {product.imageUri ? (
+                <Image source={{ uri: product.imageUri }} style={styles.productImage} />
+              ) : (
+                <View style={[styles.productImage, { justifyContent: 'center', alignItems: 'center' }]}>
+                  <Text style={{ color: '#aaa', fontSize: 12 }}>No Image</Text>
+                </View>
+              )}
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={styles.mostSoldTitle}>🔥 Top {index + 1} Sold</Text>
+                <Text style={styles.mostSoldName}>{product.itemName}</Text>
+                <Text style={styles.mostSoldQty}>Sold: {product.quantity} times</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
 
       <FlatList
         data={sales}
@@ -167,11 +218,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f9f9f9',
   },
-  header: {
+  headerRowWrap: {
     backgroundColor: '#fff',
     paddingVertical: 14,
     paddingHorizontal: 20,
-    alignItems: 'flex-start',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
     marginBottom: 10,
@@ -180,6 +233,48 @@ const styles = StyleSheet.create({
   orderCount: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  exportBtn: {
+    backgroundColor: '#007bff',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  exportBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  mostSoldCard: {
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    marginBottom: 10,
+    borderRadius: 12,
+    elevation: 2,
+  },
+  productImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#eee',
+  },
+  mostSoldTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+  },
+  mostSoldName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#222',
+  },
+  mostSoldQty: {
+    fontSize: 14,
+    color: '#007bff',
+    fontWeight: '600',
+    marginTop: 4,
   },
   listContent: {
     padding: 16,
@@ -282,30 +377,4 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
-  headerRowWrap: {
-  backgroundColor: '#fff',
-  paddingVertical: 14,
-  paddingHorizontal: 20,
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  borderBottomLeftRadius: 12,
-  borderBottomRightRadius: 12,
-  marginBottom: 10,
-  elevation: 4,
-},
-
-exportBtn: {
-  backgroundColor: '#007bff',
-  paddingVertical: 6,
-  paddingHorizontal: 12,
-  borderRadius: 8,
-},
-
-exportBtnText: {
-  color: '#fff',
-  fontSize: 14,
-  fontWeight: '600',
-},
-
 });

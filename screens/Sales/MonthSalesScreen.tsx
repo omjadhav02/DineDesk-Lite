@@ -1,4 +1,3 @@
-""// screens/MonthlySalesScreen.tsx
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -8,9 +7,12 @@ import {
   ActivityIndicator,
   Alert,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { getAllSales } from '../../db/sales';
+import { getAllProducts } from '../../db/product';
 import { Sale } from '../../types/Sale';
+import { Product } from '../../types/Product';
 import { Ionicons } from '@expo/vector-icons';
 import { generateMonthlySalesPDF, generateSingleDaySalesPDF } from '../../components/PDFGenerator';
 import * as Sharing from 'expo-sharing';
@@ -29,6 +31,9 @@ const MonthlySalesScreen = () => {
   const [monthlySales, setMonthlySales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalMonthlyRevenue, setTotalMonthlyRevenue] = useState(0);
+  const [topProducts, setTopProducts] = useState<
+    { itemName: string; quantity: number; imageUri?: string }[]
+  >([]);
 
   const now = new Date();
   const currentMonthLabel = now.toLocaleString('default', {
@@ -58,7 +63,11 @@ const MonthlySalesScreen = () => {
     const fetchMonthlySales = async () => {
       try {
         setLoading(true);
-        const allSales = await getAllSales();
+        const [allSales, allProducts] = await Promise.all([
+          getAllSales(),
+          getAllProducts(),
+        ]);
+
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
 
@@ -68,23 +77,21 @@ const MonthlySalesScreen = () => {
 
         allSales.forEach((sale) => {
           const dateObj = new Date(sale.timestamp);
-
           if (
             dateObj.getMonth() === currentMonth &&
             dateObj.getFullYear() === currentYear
           ) {
             filteredSales.push(sale);
-
-            const dateKey = dateObj.toDateString();
-            const dateLabel = `${dateObj.getDate()} ${dateObj.toLocaleString('default', {
+            const key = dateObj.toDateString();
+            const label_date = `${dateObj.getDate()} ${dateObj.toLocaleString('default', {
               month: 'long',
             })} ${dateObj.getFullYear()}`;
-            const dayLabel = dateObj.toLocaleString('default', { weekday: 'long' });
+            const label_day = dateObj.toLocaleString('default', { weekday: 'long' });
 
-            if (!dayMap[dateKey]) {
-              dayMap[dateKey] = {
-                date: dateLabel,
-                day: dayLabel,
+            if (!dayMap[key]) {
+              dayMap[key] = {
+                date: label_date,
+                day: label_day,
                 totalItems: 0,
                 totalOrders: 0,
                 totalRevenue: 0,
@@ -92,23 +99,46 @@ const MonthlySalesScreen = () => {
               };
             }
 
-            dayMap[dateKey].sales.push(sale);
-            dayMap[dateKey].totalOrders += 1;
-            dayMap[dateKey].totalItems += sale.totalItems;
-            dayMap[dateKey].totalRevenue += sale.totalPrice;
+            dayMap[key].sales.push(sale);
+            dayMap[key].totalOrders += 1;
+            dayMap[key].totalItems += sale.totalItems;
+            dayMap[key].totalRevenue += sale.totalPrice;
             revenueSum += sale.totalPrice;
           }
         });
 
-        const sortedSummaries = Object.values(dayMap).sort((a, b) =>
-          new Date(a.date).getTime() - new Date(b.date).getTime()
-        );
-
         setMonthlySales(filteredSales);
-        setDailySummaries(sortedSummaries);
+        setDailySummaries(
+          Object.values(dayMap).sort(
+            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+          )
+        );
         setTotalMonthlyRevenue(revenueSum);
+
+        // 🔥 Top 3 Most Sold Products
+        const productMap: Record<string, Product> = {};
+        allProducts.forEach((p) => (productMap[p.itemName] = p));
+
+        const countMap: Record<string, number> = {};
+        filteredSales.forEach((sale) => {
+          sale.items.forEach((item) => {
+            countMap[item.itemName] =
+              (countMap[item.itemName] || 0) + item.quantity;
+          });
+        });
+
+        const sortedTop = Object.entries(countMap)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([itemName, quantity]) => ({
+            itemName,
+            quantity,
+            imageUri: productMap[itemName]?.imageUri,
+          }));
+
+        setTopProducts(sortedTop);
       } catch (error) {
-        console.error('Error fetching monthly sales:', error);
+        console.error(error);
         Alert.alert('Error', 'Failed to load monthly sales.');
       } finally {
         setLoading(false);
@@ -122,13 +152,17 @@ const MonthlySalesScreen = () => {
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <Text style={styles.date}>{`${item.date} | ${item.day}`}</Text>
-        <TouchableOpacity onPress={() => handleDayExportPDF(item.sales, `${item.date} ${item.day}`)}>
+        <TouchableOpacity
+          onPress={() =>
+            handleDayExportPDF(item.sales, `${item.date} ${item.day}`)
+          }
+        >
           <Ionicons name="document-text-outline" size={18} color="#007bff" />
         </TouchableOpacity>
       </View>
-      <Text style={styles.detail}>Items Sold : {item.totalItems}</Text>
-      <Text style={styles.detail}>Orders : {item.totalOrders}</Text>
-      <Text style={styles.detail}>Revenue : ₹{item.totalRevenue.toFixed(2)}</Text>
+      <Text style={styles.detail}>Items Sold: {item.totalItems}</Text>
+      <Text style={styles.detail}>Orders: {item.totalOrders}</Text>
+      <Text style={styles.detail}>Revenue: ₹{item.totalRevenue.toFixed(2)}</Text>
     </View>
   );
 
@@ -143,18 +177,41 @@ const MonthlySalesScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* 🔺 Month Heading */}
       <View style={styles.header}>
         <Ionicons name="calendar-outline" size={24} color="#007bff" style={{ marginRight: 8 }} />
-        <Text style={styles.monthText}> {currentMonthLabel}</Text>
+        <Text style={styles.monthText}>{currentMonthLabel}</Text>
         <TouchableOpacity onPress={handleExportPDF} style={{ marginLeft: 'auto' }}>
           <Ionicons name="document-text" size={22} color="#007bff" />
         </TouchableOpacity>
       </View>
 
+      {/* 🔥 Top 3 Most Sold Products */}
+      {topProducts.length > 0 && (
+        <View style={{ marginHorizontal: 16, marginBottom: 10 }}>
+          {topProducts.map((prod, index) => (
+            <View key={index} style={styles.mostSoldCard}>
+              {prod.imageUri ? (
+                <Image source={{ uri: prod.imageUri }} style={styles.productImage} />
+              ) : (
+                <View style={[styles.productImage, styles.noImage]}>
+                  <Text style={styles.noImageText}>No Image</Text>
+                </View>
+              )}
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={styles.mostSoldTitle}>
+                  🔥 {index === 0 ? 'Most Sold' : index === 1 ? '2nd Most' : '3rd Most'} This Month
+                </Text>
+                <Text style={styles.mostSoldName}>{prod.itemName}</Text>
+                <Text style={styles.mostSoldQty}>Sold: {prod.quantity} times</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
       <FlatList
         data={dailySummaries}
-        keyExtractor={(_, index) => index.toString()}
+        keyExtractor={(_, i) => i.toString()}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
@@ -162,7 +219,6 @@ const MonthlySalesScreen = () => {
         }
       />
 
-      {/* 🔻 Bottom Tab */}
       <View style={styles.totalBar}>
         <Text style={styles.totalLabel}>Total Monthly Revenue</Text>
         <Text style={styles.totalValue}>₹{totalMonthlyRevenue.toFixed(2)}</Text>
@@ -174,40 +230,29 @@ const MonthlySalesScreen = () => {
 export default MonthlySalesScreen;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9f9f9',
-  },
+  container: { flex: 1, backgroundColor: '#f9f9f9' },
   header: {
     backgroundColor: '#fff',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    alignItems: 'center',
+    padding: 14,
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
-    marginBottom: 10,
     elevation: 4,
     flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 20,
   },
-  monthText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 100,
-  },
+  monthText: { fontSize: 18, fontWeight: '700', color: '#333' },
+  listContent: { padding: 16, paddingBottom: 100 },
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 14,
     marginBottom: 12,
+    elevation: 2,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -215,49 +260,61 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
-  date: {
-    fontWeight: '700',
-    fontSize: 15,
-    color: '#007bff',
-  },
-  detail: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#222',
-    marginBottom: 4,
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 50,
-    fontSize: 16,
-    color: '#888',
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  date: { fontWeight: '700', fontSize: 15, color: '#007bff' },
+  detail: { fontSize: 15, fontWeight: '500', color: '#222', marginBottom: 4 },
+  emptyText: { textAlign: 'center', marginTop: 50, fontSize: 16, color: '#888' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   totalBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: '#007bff',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    padding: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
     elevation: 10,
+    alignItems: 'center',
   },
-  totalLabel: {
-    color: '#fff',
-    fontSize: 16,
+  totalLabel: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  totalValue: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  mostSoldCard: {
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    marginBottom: 8,
+    borderRadius: 12,
+    elevation: 2,
+  },
+  productImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#eee',
+  },
+  noImage: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noImageText: {
+    color: '#aaa',
+    fontSize: 12,
+  },
+  mostSoldTitle: {
+    fontSize: 14,
     fontWeight: '600',
+    color: '#555',
   },
-  totalValue: {
-    color: '#fff',
-    fontSize: 18,
+  mostSoldName: {
+    fontSize: 16,
     fontWeight: '700',
+    color: '#222',
+  },
+  mostSoldQty: {
+    fontSize: 14,
+    color: '#007bff',
+    fontWeight: '600',
+    marginTop: 4,
   },
 });
