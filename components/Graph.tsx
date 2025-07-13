@@ -17,7 +17,7 @@ interface GraphProps {
 const Graph: React.FC<GraphProps> = ({ title, labels, data }) => {
   const { width } = useWindowDimensions();
 
-  // Increase chart width to allow spacing
+  // Ensure the chart has enough width to fit all labels nicely
   const chartWidth = Math.max(width * 1.2, labels.length * 20);
 
   const [tooltipPos, setTooltipPos] = useState<{
@@ -67,6 +67,7 @@ const Graph: React.FC<GraphProps> = ({ title, labels, data }) => {
           onDataPointClick={(dataPoint) => {
             const isSamePoint =
               tooltipPos.x === dataPoint.x && tooltipPos.y === dataPoint.y;
+
             isSamePoint
               ? setTooltipPos((prev) => ({ ...prev, visible: !prev.visible }))
               : setTooltipPos({
@@ -77,8 +78,8 @@ const Graph: React.FC<GraphProps> = ({ title, labels, data }) => {
                   visible: true,
                 });
           }}
-          decorator={() => {
-            return tooltipPos.visible ? (
+          decorator={() =>
+            tooltipPos.visible ? (
               <View
                 style={{
                   position: 'absolute',
@@ -95,8 +96,8 @@ const Graph: React.FC<GraphProps> = ({ title, labels, data }) => {
                   {tooltipPos.label}: ₹{tooltipPos.value.toFixed(2)}
                 </Text>
               </View>
-            ) : null;
-          }}
+            ) : null
+          }
           style={{
             marginTop: 8,
             borderRadius: 16,

@@ -183,7 +183,7 @@ export const generateMonthlySalesPDF = async (sales: Sale[], monthName: string) 
 // ░░░ YEARLY SALES PDF ░░░
 export const generateYearlySalesPDF = async (
   summaries: MonthlySummary[],
-  year: number
+  year: string
 ) => {
   const fileName = `Yearly_Sales_${year}.pdf`;
 

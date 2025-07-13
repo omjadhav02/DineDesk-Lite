@@ -28,16 +28,20 @@ const YearSalesScreen = () => {
   const [monthlySummaries, setMonthlySummaries] = useState<MonthlySummary[]>([]);
   const [allSales, setAllSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
-  const [totalYearlyRevenue, setTotalYearlyRevenue] = useState(0);
+  const [totalRevenue, setTotalRevenue] = useState(0);
   const [soldProducts, setSoldProducts] = useState<SoldProduct[]>([]);
   const [showSoldProducts, setShowSoldProducts] = useState(false);
 
   const now = new Date();
-  const currentYear = now.getFullYear();
+  const startOfRange = new Date(now);
+  startOfRange.setMonth(startOfRange.getMonth() - 11);
+  startOfRange.setDate(1);
+  startOfRange.setHours(0, 0, 0, 0);
 
   const handleExportPDF = async () => {
     try {
-      const fileUri = await generateYearlySalesPDF(monthlySummaries, currentYear);
+      const label = `${startOfRange.toLocaleString('default', { month: 'short' })} ${startOfRange.getFullYear()} - ${now.toLocaleString('default', { month: 'short' })} ${now.getFullYear()}`;
+      const fileUri = await generateYearlySalesPDF(monthlySummaries, label);
       await Sharing.shareAsync(fileUri);
     } catch (error) {
       Alert.alert('Error', 'Failed to export yearly sales.');
@@ -63,43 +67,42 @@ const YearSalesScreen = () => {
   };
 
   useEffect(() => {
-    const fetchYearlySales = async () => {
+    const fetchSales = async () => {
       try {
         setLoading(true);
         const [sales, products] = await Promise.all([getAllSales(), getAllProducts()]);
         setAllSales(sales);
 
-        const monthMap: { [key: string]: MonthlySummary } = {};
-        let revenueSum = 0;
-
         const productMap: Record<string, Product> = {};
-        products.forEach(p => (productMap[p.itemName] = p));
+        products.forEach((p) => (productMap[p.itemName] = p));
 
+        const monthMap: Record<string, MonthlySummary> = {};
         const countMap: Record<string, { quantity: number; totalPrice: number }> = {};
+        let revenueSum = 0;
 
         sales.forEach((sale) => {
           const date = new Date(sale.timestamp);
-          if (date.getFullYear() === currentYear) {
-            const monthKey = date.toLocaleString('default', {
+          if (date >= startOfRange && date <= now) {
+            const monthLabel = date.toLocaleString('default', {
               month: 'long',
               year: 'numeric',
             });
 
-            if (!monthMap[monthKey]) {
-              monthMap[monthKey] = {
-                month: monthKey,
+            if (!monthMap[monthLabel]) {
+              monthMap[monthLabel] = {
+                month: monthLabel,
                 totalItems: 0,
                 totalOrders: 0,
                 totalRevenue: 0,
               };
             }
 
-            monthMap[monthKey].totalOrders += 1;
-            monthMap[monthKey].totalItems += sale.totalItems;
-            monthMap[monthKey].totalRevenue += sale.totalPrice;
+            monthMap[monthLabel].totalOrders += 1;
+            monthMap[monthLabel].totalItems += sale.totalItems;
+            monthMap[monthLabel].totalRevenue += sale.totalPrice;
             revenueSum += sale.totalPrice;
 
-            sale.items.forEach(item => {
+            sale.items.forEach((item) => {
               if (!countMap[item.itemName]) {
                 countMap[item.itemName] = { quantity: 0, totalPrice: 0 };
               }
@@ -110,6 +113,14 @@ const YearSalesScreen = () => {
           }
         });
 
+        const sortedMonths = Object.entries(monthMap)
+          .map(([month, summary]) => ({
+            ...summary,
+            sortDate: new Date(month),
+          }))
+          .sort((a, b) => a.sortDate.getTime() - b.sortDate.getTime())
+          .map(({ sortDate, ...summary }) => summary);
+
         const soldList: SoldProduct[] = Object.entries(countMap)
           .sort((a, b) => b[1].quantity - a[1].quantity)
           .map(([itemName, data]) => ({
@@ -119,22 +130,18 @@ const YearSalesScreen = () => {
             imageUri: productMap[itemName]?.imageUri,
           }));
 
-        setMonthlySummaries(
-          Object.values(monthMap).sort(
-            (a, b) => new Date(a.month).getMonth() - new Date(b.month).getMonth()
-          )
-        );
-        setTotalYearlyRevenue(revenueSum);
+        setMonthlySummaries(sortedMonths);
+        setTotalRevenue(revenueSum);
         setSoldProducts(soldList);
       } catch (error) {
-        console.error('Error fetching yearly sales:', error);
-        Alert.alert('Error', 'Failed to load yearly sales.');
+        console.error('Error fetching sales:', error);
+        Alert.alert('Error', 'Failed to load sales data.');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchYearlySales();
+    fetchSales();
   }, []);
 
   const renderSoldProduct = ({ item }: { item: SoldProduct }) => (
@@ -173,7 +180,7 @@ const YearSalesScreen = () => {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#007bff" />
-        <Text style={{ marginTop: 10 }}>Loading yearly sales...</Text>
+        <Text style={{ marginTop: 10 }}>Loading sales...</Text>
       </View>
     );
   }
@@ -182,14 +189,12 @@ const YearSalesScreen = () => {
     <View style={styles.container}>
       <View style={styles.header}>
         <Ionicons name="calendar-outline" size={24} color="#007bff" style={{ marginRight: 8 }} />
-        <Text style={styles.yearText}>{currentYear}</Text>
-        <View style={{ flex: 1 }} />
-        <TouchableOpacity onPress={handleExportPDF}>
+        <Text style={styles.yearText}>Last 12 Months</Text>
+        <TouchableOpacity onPress={handleExportPDF} style={{ marginLeft: 'auto' }}>
           <Ionicons name="document-text" size={22} color="#007bff" />
         </TouchableOpacity>
       </View>
 
-      {/* Sold Products Toggle */}
       <TouchableOpacity
         onPress={() => setShowSoldProducts(!showSoldProducts)}
         style={styles.toggleSoldBar}
@@ -202,7 +207,6 @@ const YearSalesScreen = () => {
         />
       </TouchableOpacity>
 
-      {/* Sold Products List */}
       {showSoldProducts && (
         <FlatList
           data={soldProducts}
@@ -217,20 +221,22 @@ const YearSalesScreen = () => {
         keyExtractor={(_, index) => index.toString()}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No sales found for this year.</Text>
-        }
+        ListEmptyComponent={<Text style={styles.emptyText}>No sales found.</Text>}
       />
 
       <View style={styles.totalBar}>
-        <Text style={styles.totalLabel}>Total Yearly Revenue</Text>
-        <Text style={styles.totalValue}>₹{totalYearlyRevenue.toFixed(2)}</Text>
+        <Text style={styles.totalLabel}>Total Revenue</Text>
+        <Text style={styles.totalValue}>₹{totalRevenue.toFixed(2)}</Text>
       </View>
     </View>
   );
 };
 
 export default YearSalesScreen;
+
+
+
+
 
 const styles = StyleSheet.create({
   container: {

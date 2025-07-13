@@ -131,28 +131,37 @@ const SalesScreen = () => {
   };
 
   const prepareYearlyData = (): { labels: string[]; data: number[] } => {
-    const map = new Map<string, number>();
-    const months = Array.from({ length: 12 }, (_, i) =>
-      new Date(0, i).toLocaleString('default', { month: 'short' })
-    );
+  const map = new Map<string, number>();
+  const labelMap = new Map<string, string>(); // Key = '2024-08', Value = 'Aug'
+  const now = new Date();
 
-    months.forEach(m => map.set(m, 0));
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${d.getMonth() + 1}`; // e.g. "2024-8"
+    const label = d.toLocaleString('default', { month: 'short' }); // e.g. "Aug"
+    map.set(key, 0);
+    labelMap.set(key, label);
+  }
 
-    sales.forEach(sale => {
-      const date = new Date(sale.timestamp);
-      if (date.getFullYear() === new Date().getFullYear()) {
-        const monthLabel = date.toLocaleString('default', { month: 'short' });
-        if (map.has(monthLabel)) {
-          map.set(monthLabel, map.get(monthLabel)! + sale.totalPrice);
-        }
-      }
-    });
+  sales.forEach(sale => {
+    const date = new Date(sale.timestamp);
+    const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
+    if (map.has(key)) {
+      map.set(key, map.get(key)! + sale.totalPrice);
+    }
+  });
 
-    return {
-      labels: Array.from(map.keys()),
-      data: Array.from(map.values()),
-    };
-  };
+  const labels: string[] = [];
+  const data: number[] = [];
+
+  for (const [key, value] of map.entries()) {
+    labels.push(labelMap.get(key)!);
+    data.push(value);
+  }
+
+  return { labels, data };
+};
+
 
   useEffect(() => {
     fetchSales();
