@@ -29,17 +29,43 @@ type DailySummary = {
   sales: Sale[];
 };
 
+type SoldProduct = {
+  itemName: string;
+  quantity: number;
+  totalPrice: number;
+  imageUri?: string;
+};
+
 const WeekSalesScreen = () => {
   const [dailySummaries, setDailySummaries] = useState<DailySummary[]>([]);
   const [weeklySales, setWeeklySales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalWeeklyRevenue, setTotalWeeklyRevenue] = useState(0);
-  const [topProducts, setTopProducts] = useState<
-    { itemName: string; quantity: number; imageUri?: string }[]
-  >([]);
+  const [mostSold, setMostSold] = useState<SoldProduct | null>(null);
+  const [soldProducts, setSoldProducts] = useState<SoldProduct[]>([]);
+  const [showSoldProducts, setShowSoldProducts] = useState(false);
 
   const now = new Date();
-  const weekLabel = `Week of ${now.toLocaleDateString('en-GB', {
+
+  const getLocalStartOfWeek = (date: Date) => {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const day = start.getDay(); // 0 = Sunday
+    start.setDate(start.getDate() - day);
+    return start;
+  };
+
+  const getLocalEndOfWeek = (startOfWeek: Date) => {
+    const end = new Date(startOfWeek);
+    end.setDate(end.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return end;
+  };
+
+  const startOfWeek = getLocalStartOfWeek(now);
+  const endOfWeek = getLocalEndOfWeek(startOfWeek);
+
+  const weekLabel = `Week of ${startOfWeek.toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'short',
   })}`;
@@ -72,42 +98,38 @@ const WeekSalesScreen = () => {
           getAllProducts(),
         ]);
 
-        const today = new Date();
-        const startOfWeek = new Date(today);
-        startOfWeek.setDate(today.getDate() - today.getDay());
+        const filteredSales: Sale[] = allSales.filter((sale) => {
+          const dateObj = new Date(sale.timestamp);
+          return dateObj >= startOfWeek && dateObj <= endOfWeek;
+        });
 
         const dailyMap: { [key: string]: DailySummary } = {};
-        const filteredSales: Sale[] = [];
         let revenueSum = 0;
 
-        allSales.forEach((sale) => {
+        filteredSales.forEach((sale) => {
           const dateObj = new Date(sale.timestamp);
-          if (dateObj >= startOfWeek && dateObj <= today) {
-            filteredSales.push(sale);
+          const dateKey = dateObj.toDateString();
+          const dateLabel = `${dateObj.getDate()} ${dateObj.toLocaleString('default', {
+            month: 'long',
+          })} ${dateObj.getFullYear()}`;
+          const dayLabel = dateObj.toLocaleString('default', { weekday: 'long' });
 
-            const dateKey = dateObj.toDateString();
-            const dateLabel = `${dateObj.getDate()} ${dateObj.toLocaleString('default', {
-              month: 'long',
-            })} ${dateObj.getFullYear()}`;
-            const dayLabel = dateObj.toLocaleString('default', { weekday: 'long' });
-
-            if (!dailyMap[dateKey]) {
-              dailyMap[dateKey] = {
-                date: dateLabel,
-                day: dayLabel,
-                totalItems: 0,
-                totalOrders: 0,
-                totalRevenue: 0,
-                sales: [],
-              };
-            }
-
-            dailyMap[dateKey].sales.push(sale);
-            dailyMap[dateKey].totalOrders += 1;
-            dailyMap[dateKey].totalItems += sale.totalItems;
-            dailyMap[dateKey].totalRevenue += sale.totalPrice;
-            revenueSum += sale.totalPrice;
+          if (!dailyMap[dateKey]) {
+            dailyMap[dateKey] = {
+              date: dateLabel,
+              day: dayLabel,
+              totalItems: 0,
+              totalOrders: 0,
+              totalRevenue: 0,
+              sales: [],
+            };
           }
+
+          dailyMap[dateKey].sales.push(sale);
+          dailyMap[dateKey].totalOrders += 1;
+          dailyMap[dateKey].totalItems += sale.totalItems;
+          dailyMap[dateKey].totalRevenue += sale.totalPrice;
+          revenueSum += sale.totalPrice;
         });
 
         const sortedSummaries = Object.values(dailyMap).sort((a, b) =>
@@ -118,28 +140,48 @@ const WeekSalesScreen = () => {
         setDailySummaries(sortedSummaries);
         setTotalWeeklyRevenue(revenueSum);
 
-        // ✅ Calculate top 3 most sold products
         const productMap: Record<string, Product> = {};
         allProducts.forEach((p) => (productMap[p.itemName] = p));
 
-        const countMap: { [key: string]: number } = {};
+        const countMap: { [key: string]: { quantity: number; totalPrice: number } } = {};
+
         filteredSales.forEach((sale) => {
           sale.items.forEach((item) => {
-            countMap[item.itemName] =
-              (countMap[item.itemName] ?? 0) + item.quantity;
+            if (!countMap[item.itemName]) {
+              countMap[item.itemName] = { quantity: 0, totalPrice: 0 };
+            }
+            countMap[item.itemName].quantity += item.quantity;
+            countMap[item.itemName].totalPrice += item.quantity * (productMap[item.itemName]?.price || 0);
           });
         });
 
-        const sortedTop = Object.entries(countMap)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 3)
-          .map(([itemName, quantity]) => ({
+        let max: SoldProduct | null = null;
+        const productsSoldList: SoldProduct[] = [];
+
+        for (const itemName in countMap) {
+          const { quantity, totalPrice } = countMap[itemName];
+          productsSoldList.push({
             itemName,
             quantity,
+            totalPrice,
             imageUri: productMap[itemName]?.imageUri,
-          }));
+          });
 
-        setTopProducts(sortedTop);
+          if (!max || quantity > max.quantity) {
+            max = {
+              itemName,
+              quantity,
+              totalPrice,
+              imageUri: productMap[itemName]?.imageUri,
+            };
+          }
+        }
+
+        // ✅ Sort sold products by quantity descending
+        productsSoldList.sort((a, b) => b.quantity - a.quantity);
+
+        setMostSold(max);
+        setSoldProducts(productsSoldList);
       } catch (error) {
         console.error('Error fetching weekly sales:', error);
         Alert.alert('Error', 'Failed to load weekly sales.');
@@ -169,6 +211,24 @@ const WeekSalesScreen = () => {
     </View>
   );
 
+  const renderSoldProduct = ({ item }: { item: SoldProduct }) => (
+    <View style={styles.soldProductCard}>
+      {item.imageUri ? (
+        <Image source={{ uri: item.imageUri }} style={styles.productImage} />
+      ) : (
+        <View style={[styles.productImage, { justifyContent: 'center', alignItems: 'center' }]}>
+          <Text style={{ color: '#aaa', fontSize: 12 }}>No Image</Text>
+        </View>
+      )}
+      <View style={{ flex: 1, marginLeft: 10 }}>
+        <Text style={styles.mostSoldName}>{item.itemName}</Text>
+        <Text style={styles.soldProductDetails}>
+          Sold: {item.quantity} times | ₹{item.totalPrice.toFixed(2)}
+        </Text>
+      </View>
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -188,28 +248,44 @@ const WeekSalesScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* ✅ Top 3 Products Card */}
-      {topProducts.length > 0 && (
-        <View style={{ marginHorizontal: 16, marginBottom: 10 }}>
-          {topProducts.map((prod, index) => (
-            <View key={index} style={styles.mostSoldCard}>
-              {prod.imageUri ? (
-                <Image source={{ uri: prod.imageUri }} style={styles.productImage} />
-              ) : (
-                <View style={[styles.productImage, { justifyContent: 'center', alignItems: 'center' }]}>
-                  <Text style={{ color: '#aaa', fontSize: 12 }}>No Image</Text>
-                </View>
-              )}
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.mostSoldTitle}>
-                  🔥 {index === 0 ? 'Most Sold' : index === 1 ? '2nd Most' : '3rd Most'} This Week
-                </Text>
-                <Text style={styles.mostSoldName}>{prod.itemName}</Text>
-                <Text style={styles.mostSoldQty}>Sold: {prod.quantity} times</Text>
-              </View>
+      {mostSold && (
+        <View style={styles.mostSoldCard}>
+          {mostSold.imageUri ? (
+            <Image source={{ uri: mostSold.imageUri }} style={styles.productImage} />
+          ) : (
+            <View style={[styles.productImage, { justifyContent: 'center', alignItems: 'center' }]}>
+              <Text style={{ color: '#aaa', fontSize: 12 }}>No Image</Text>
             </View>
-          ))}
+          )}
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.mostSoldTitle}>🔥 Most Sold This Week</Text>
+            <Text style={styles.mostSoldName}>{mostSold.itemName}</Text>
+            <Text style={styles.mostSoldQty}>
+              Sold: {mostSold.quantity} times | ₹{mostSold.totalPrice.toFixed(2)}
+            </Text>
+          </View>
         </View>
+      )}
+
+      <TouchableOpacity
+        onPress={() => setShowSoldProducts(!showSoldProducts)}
+        style={styles.toggleSoldBar}
+      >
+        <Text style={styles.toggleSoldText}>Sold Products</Text>
+        <Ionicons
+          name={showSoldProducts ? 'chevron-up' : 'chevron-down'}
+          size={22}
+          color="#007bff"
+        />
+      </TouchableOpacity>
+
+      {showSoldProducts && (
+        <FlatList
+          data={soldProducts}
+          keyExtractor={(item) => item.itemName}
+          renderItem={renderSoldProduct}
+          contentContainerStyle={styles.soldProductsList}
+        />
       )}
 
       <FlatList
@@ -259,10 +335,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
   cardHeader: {
@@ -321,7 +393,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
-    marginBottom: 8,
+    marginHorizontal: 16,
+    marginBottom: 10,
     borderRadius: 12,
     elevation: 2,
   },
@@ -343,6 +416,40 @@ const styles = StyleSheet.create({
   },
   mostSoldQty: {
     fontSize: 14,
+    color: '#007bff',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  toggleSoldBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    padding: 14,
+    borderRadius: 12,
+    elevation: 2,
+    marginBottom: 10,
+  },
+  toggleSoldText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#007bff',
+  },
+  soldProductsList: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  soldProductCard: {
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 10,
+    elevation: 2,
+  },
+  soldProductDetails: {
     color: '#007bff',
     fontWeight: '600',
     marginTop: 4,

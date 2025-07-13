@@ -13,67 +13,84 @@ import { getAllSales, deleteSingleSale } from '../../db/sales';
 import { getAllProducts } from '../../db/product';
 import { Sale } from '../../types/Sale';
 import { Product } from '../../types/Product';
-import { generateTodaySalesPDF } from '../../components/PDFGenerator';
+import { Ionicons } from '@expo/vector-icons';
+import { generateSingleDaySalesPDF } from '../../components/PDFGenerator';
 import * as Sharing from 'expo-sharing';
+
+type SoldProduct = {
+  itemName: string;
+  quantity: number;
+  totalPrice: number;
+  imageUri?: string;
+};
 
 const TodaySalesScreen = () => {
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
-  const [totalToday, setTotalToday] = useState(0);
-  const [topProducts, setTopProducts] = useState<
-    { itemName: string; quantity: number; imageUri?: string }[]
-  >([]);
+  const [totalTodayRevenue, setTotalTodayRevenue] = useState(0);
+  const [soldProducts, setSoldProducts] = useState<SoldProduct[]>([]);
+  const [showSoldProducts, setShowSoldProducts] = useState(false);
+
+  const getStartOfToday = () => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  };
+
+  const getEndOfToday = () => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  };
 
   useEffect(() => {
     const fetchTodaySales = async () => {
       try {
         setLoading(true);
+        const [allSales, allProducts] = await Promise.all([getAllSales(), getAllProducts()]);
 
-        const [allSales, allProducts] = await Promise.all([
-          getAllSales(),
-          getAllProducts(),
-        ]);
+        const start = getStartOfToday().getTime();
+        const end = getEndOfToday().getTime();
 
-        const today = new Date();
-        const filtered = allSales.filter((sale) => {
-          const saleDate = new Date(sale.timestamp);
-          return (
-            saleDate.getDate() === today.getDate() &&
-            saleDate.getMonth() === today.getMonth() &&
-            saleDate.getFullYear() === today.getFullYear()
-          );
+        const todaySales = allSales.filter(sale => {
+          const ts = new Date(sale.timestamp).getTime();
+          return ts >= start && ts <= end;
         });
 
-        const total = filtered.reduce((sum, sale) => sum + sale.totalPrice, 0);
-        setSales(filtered);
-        setTotalToday(total);
+        setSales(todaySales);
+
+        const totalRevenue = todaySales.reduce((sum, sale) => sum + sale.totalPrice, 0);
+        setTotalTodayRevenue(totalRevenue);
 
         const productMap: Record<string, Product> = {};
-        allProducts.forEach((p) => {
+        allProducts.forEach(p => {
           productMap[p.itemName] = p;
         });
 
-        const countMap: Record<string, number> = {};
-        filtered.forEach((sale) => {
-          sale.items.forEach((item) => {
-            countMap[item.itemName] =
-              (countMap[item.itemName] ?? 0) + item.quantity;
+        const countMap: Record<string, { quantity: number; totalPrice: number }> = {};
+
+        todaySales.forEach(sale => {
+          sale.items.forEach(item => {
+            if (!countMap[item.itemName]) {
+              countMap[item.itemName] = { quantity: 0, totalPrice: 0 };
+            }
+            countMap[item.itemName].quantity += item.quantity;
+            const pricePerItem = productMap[item.itemName]?.price ?? item.price ?? 0;
+            countMap[item.itemName].totalPrice += item.quantity * pricePerItem;
           });
         });
 
-        const sorted = Object.entries(countMap)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 3)
-          .map(([itemName, quantity]) => ({
+        const soldList: SoldProduct[] = Object.entries(countMap)
+          .map(([itemName, data]) => ({
             itemName,
-            quantity,
+            quantity: data.quantity,
+            totalPrice: data.totalPrice,
             imageUri: productMap[itemName]?.imageUri,
-          }));
+          }))
+          .sort((a, b) => b.quantity - a.quantity); // 🔥 DESCENDING ORDER
 
-        setTopProducts(sorted);
+        setSoldProducts(soldList);
       } catch (error) {
-        console.error('Error fetching today sales:', error);
-        Alert.alert('Error', "Failed to load today's sales.");
+        console.error('Error loading today sales:', error);
+        Alert.alert('Error', "Couldn't load today's sales");
       } finally {
         setLoading(false);
       }
@@ -84,15 +101,10 @@ const TodaySalesScreen = () => {
 
   const handleExportPDF = async () => {
     try {
-      const uri = await generateTodaySalesPDF(sales, totalToday);
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri);
-      } else {
-        Alert.alert('PDF Saved', 'PDF saved at:\n' + uri);
-      }
+      const fileUri = await generateSingleDaySalesPDF(sales, 'Today Sales');
+      await Sharing.shareAsync(fileUri);
     } catch (error) {
-      console.error('PDF Error:', error);
-      Alert.alert('Error', 'Failed to generate PDF.');
+      Alert.alert('Error', 'Failed to export sales PDF.');
     }
   };
 
@@ -107,7 +119,7 @@ const TodaySalesScreen = () => {
             await deleteSingleSale(id);
             setSales((prev) => {
               const updated = prev.filter((s) => s.id !== id);
-              setTotalToday(updated.reduce((sum, s) => sum + s.totalPrice, 0));
+              setTotalTodayRevenue(updated.reduce((sum, s) => sum + s.totalPrice, 0));
               return updated;
             });
           } catch (error) {
@@ -119,8 +131,26 @@ const TodaySalesScreen = () => {
     ]);
   };
 
+  const renderSoldProduct = ({ item }: { item: SoldProduct }) => (
+    <View style={styles.soldProductCard}>
+      {item.imageUri ? (
+        <Image source={{ uri: item.imageUri }} style={styles.productImage} />
+      ) : (
+        <View style={[styles.productImage, { justifyContent: 'center', alignItems: 'center' }]}>
+          <Text style={{ color: '#aaa', fontSize: 12 }}>No Image</Text>
+        </View>
+      )}
+      <View style={{ flex: 1, marginLeft: 10 }}>
+        <Text style={styles.mostSoldName}>{item.itemName}</Text>
+        <Text style={styles.soldProductDetails}>
+          Sold: {item.quantity} times | ₹{item.totalPrice.toFixed(2)}
+        </Text>
+      </View>
+    </View>
+  );
+
   const renderSaleItem = ({ item }: { item: Sale }) => (
-    <View style={styles.card}>
+    <View style={styles.saleCard}>
       <View style={styles.headerRow}>
         <Text style={styles.saleNumber}>🧾 Sale #{item.saleNumber ?? item.id}</Text>
       </View>
@@ -157,40 +187,39 @@ const TodaySalesScreen = () => {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#007bff" />
-        <Text style={{ marginTop: 10 }}>Loading today’s sales...</Text>
+        <Text style={{ marginTop: 10 }}>Loading today's sales...</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerRowWrap}>
-        <Text style={styles.orderCount}>Total Orders: {sales.length}</Text>
-        <TouchableOpacity onPress={handleExportPDF} style={styles.exportBtn}>
-          <Text style={styles.exportBtnText}>Export PDF</Text>
+      <View style={styles.header}>
+        <Text style={styles.dateTitle}>Today's Sales</Text>
+        <TouchableOpacity onPress={handleExportPDF}>
+          <Ionicons name="document-text" size={22} color="#007bff" />
         </TouchableOpacity>
       </View>
 
-      {/* Top 3 Most Sold Product Cards */}
-      {topProducts.length > 0 && (
-        <View style={{ paddingHorizontal: 16 }}>
-          {topProducts.map((product, index) => (
-            <View key={index} style={styles.mostSoldCard}>
-              {product.imageUri ? (
-                <Image source={{ uri: product.imageUri }} style={styles.productImage} />
-              ) : (
-                <View style={[styles.productImage, { justifyContent: 'center', alignItems: 'center' }]}>
-                  <Text style={{ color: '#aaa', fontSize: 12 }}>No Image</Text>
-                </View>
-              )}
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.mostSoldTitle}>🔥 Top {index + 1} Sold</Text>
-                <Text style={styles.mostSoldName}>{product.itemName}</Text>
-                <Text style={styles.mostSoldQty}>Sold: {product.quantity} times</Text>
-              </View>
-            </View>
-          ))}
-        </View>
+      <TouchableOpacity
+        onPress={() => setShowSoldProducts(!showSoldProducts)}
+        style={styles.toggleSoldBar}
+      >
+        <Text style={styles.toggleSoldText}>Sold Products</Text>
+        <Ionicons
+          name={showSoldProducts ? 'chevron-up' : 'chevron-down'}
+          size={22}
+          color="#007bff"
+        />
+      </TouchableOpacity>
+
+      {showSoldProducts && (
+        <FlatList
+          data={soldProducts}
+          keyExtractor={(item) => item.itemName}
+          renderItem={renderSoldProduct}
+          contentContainerStyle={styles.soldProductsList}
+        />
       )}
 
       <FlatList
@@ -205,7 +234,7 @@ const TodaySalesScreen = () => {
 
       <View style={styles.totalBar}>
         <Text style={styles.totalLabel}>Total Revenue</Text>
-        <Text style={styles.totalValue}>₹{totalToday.toFixed(2)}</Text>
+        <Text style={styles.totalValue}>₹{totalTodayRevenue.toFixed(2)}</Text>
       </View>
     </View>
   );
@@ -213,45 +242,53 @@ const TodaySalesScreen = () => {
 
 export default TodaySalesScreen;
 
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9f9f9',
-  },
-  headerRowWrap: {
+  container: { flex: 1, backgroundColor: '#f9f9f9' },
+  header: {
     backgroundColor: '#fff',
     paddingVertical: 14,
     paddingHorizontal: 20,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
     marginBottom: 10,
     elevation: 4,
   },
-  orderCount: {
+  dateTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+  },
+  toggleSoldBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    padding: 14,
+    borderRadius: 12,
+    elevation: 2,
+    marginBottom: 10,
+  },
+  toggleSoldText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: '#007bff',
   },
-  exportBtn: {
-    backgroundColor: '#007bff',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+  soldProductsList: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
   },
-  exportBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  mostSoldCard: {
+  soldProductCard: {
     backgroundColor: '#fff',
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    marginBottom: 10,
+    padding: 12,
     borderRadius: 12,
+    marginBottom: 10,
     elevation: 2,
   },
   productImage: {
@@ -260,27 +297,21 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#eee',
   },
-  mostSoldTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#555',
-  },
   mostSoldName: {
     fontSize: 16,
     fontWeight: '700',
     color: '#222',
   },
-  mostSoldQty: {
-    fontSize: 14,
+  soldProductDetails: {
     color: '#007bff',
     fontWeight: '600',
     marginTop: 4,
   },
   listContent: {
-    padding: 16,
+    paddingHorizontal: 16,
     paddingBottom: 100,
   },
-  card: {
+  saleCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 14,
@@ -325,22 +356,22 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   productPrice: {
-    fontWeight: '600',
     fontSize: 15,
-    color: '#111',
+    color: '#007bff',
+    fontWeight: '600',
   },
   divider: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-    marginVertical: 10,
+    height: 1,
+    backgroundColor: '#ddd',
+    marginVertical: 8,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   summaryText: {
-    fontWeight: '600',
     fontSize: 15,
+    fontWeight: '700',
     color: '#222',
   },
   emptyText: {

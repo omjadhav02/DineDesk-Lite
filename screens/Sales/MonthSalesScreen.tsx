@@ -26,14 +26,20 @@ type DailySummary = {
   sales: Sale[];
 };
 
+type SoldProduct = {
+  itemName: string;
+  quantity: number;
+  totalPrice: number;
+  imageUri?: string;
+};
+
 const MonthlySalesScreen = () => {
   const [dailySummaries, setDailySummaries] = useState<DailySummary[]>([]);
   const [monthlySales, setMonthlySales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalMonthlyRevenue, setTotalMonthlyRevenue] = useState(0);
-  const [topProducts, setTopProducts] = useState<
-    { itemName: string; quantity: number; imageUri?: string }[]
-  >([]);
+  const [soldProducts, setSoldProducts] = useState<SoldProduct[]>([]);
+  const [showSoldProducts, setShowSoldProducts] = useState(false);
 
   const now = new Date();
   const currentMonthLabel = now.toLocaleString('default', {
@@ -115,28 +121,32 @@ const MonthlySalesScreen = () => {
         );
         setTotalMonthlyRevenue(revenueSum);
 
-        // 🔥 Top 3 Most Sold Products
+        // Calculate sold products data (quantity + total revenue) for ALL sold products
         const productMap: Record<string, Product> = {};
         allProducts.forEach((p) => (productMap[p.itemName] = p));
 
-        const countMap: Record<string, number> = {};
+        const countMap: Record<string, { quantity: number; totalPrice: number }> = {};
         filteredSales.forEach((sale) => {
           sale.items.forEach((item) => {
-            countMap[item.itemName] =
-              (countMap[item.itemName] || 0) + item.quantity;
+            if (!countMap[item.itemName]) {
+              countMap[item.itemName] = { quantity: 0, totalPrice: 0 };
+            }
+            countMap[item.itemName].quantity += item.quantity;
+            const pricePerItem = productMap[item.itemName]?.price ?? item.price ?? 0;
+            countMap[item.itemName].totalPrice += item.quantity * pricePerItem;
           });
         });
 
-        const sortedTop = Object.entries(countMap)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 3)
-          .map(([itemName, quantity]) => ({
+        const soldList: SoldProduct[] = Object.entries(countMap)
+          .sort((a, b) => b[1].quantity - a[1].quantity)
+          .map(([itemName, data]) => ({
             itemName,
-            quantity,
+            quantity: data.quantity,
+            totalPrice: data.totalPrice,
             imageUri: productMap[itemName]?.imageUri,
           }));
 
-        setTopProducts(sortedTop);
+        setSoldProducts(soldList);
       } catch (error) {
         console.error(error);
         Alert.alert('Error', 'Failed to load monthly sales.');
@@ -147,6 +157,24 @@ const MonthlySalesScreen = () => {
 
     fetchMonthlySales();
   }, []);
+
+  const renderSoldProduct = ({ item }: { item: SoldProduct }) => (
+    <View style={styles.soldProductCard}>
+      {item.imageUri ? (
+        <Image source={{ uri: item.imageUri }} style={styles.productImage} />
+      ) : (
+        <View style={[styles.productImage, styles.noImage]}>
+          <Text style={styles.noImageText}>No Image</Text>
+        </View>
+      )}
+      <View style={{ flex: 1, marginLeft: 10 }}>
+        <Text style={styles.mostSoldName}>{item.itemName}</Text>
+        <Text style={styles.soldProductDetails}>
+          Sold: {item.quantity} times | ₹{item.totalPrice.toFixed(2)}
+        </Text>
+      </View>
+    </View>
+  );
 
   const renderItem = ({ item }: { item: DailySummary }) => (
     <View style={styles.card}>
@@ -178,35 +206,39 @@ const MonthlySalesScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Ionicons name="calendar-outline" size={24} color="#007bff" style={{ marginRight: 8 }} />
+        <Ionicons
+          name="calendar-outline"
+          size={24}
+          color="#007bff"
+          style={{ marginRight: 8 }}
+        />
         <Text style={styles.monthText}>{currentMonthLabel}</Text>
         <TouchableOpacity onPress={handleExportPDF} style={{ marginLeft: 'auto' }}>
           <Ionicons name="document-text" size={22} color="#007bff" />
         </TouchableOpacity>
       </View>
 
-      {/* 🔥 Top 3 Most Sold Products */}
-      {topProducts.length > 0 && (
-        <View style={{ marginHorizontal: 16, marginBottom: 10 }}>
-          {topProducts.map((prod, index) => (
-            <View key={index} style={styles.mostSoldCard}>
-              {prod.imageUri ? (
-                <Image source={{ uri: prod.imageUri }} style={styles.productImage} />
-              ) : (
-                <View style={[styles.productImage, styles.noImage]}>
-                  <Text style={styles.noImageText}>No Image</Text>
-                </View>
-              )}
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.mostSoldTitle}>
-                  🔥 {index === 0 ? 'Most Sold' : index === 1 ? '2nd Most' : '3rd Most'} This Month
-                </Text>
-                <Text style={styles.mostSoldName}>{prod.itemName}</Text>
-                <Text style={styles.mostSoldQty}>Sold: {prod.quantity} times</Text>
-              </View>
-            </View>
-          ))}
-        </View>
+      {/* Sold Products Toggle */}
+      <TouchableOpacity
+        onPress={() => setShowSoldProducts(!showSoldProducts)}
+        style={styles.toggleSoldBar}
+      >
+        <Text style={styles.toggleSoldText}>Sold Products</Text>
+        <Ionicons
+          name={showSoldProducts ? 'chevron-up' : 'chevron-down'}
+          size={22}
+          color="#007bff"
+        />
+      </TouchableOpacity>
+
+      {/* Sold Products List */}
+      {showSoldProducts && (
+        <FlatList
+          data={soldProducts}
+          keyExtractor={(item) => item.itemName}
+          renderItem={renderSoldProduct}
+          contentContainerStyle={styles.soldProductsList}
+        />
       )}
 
       <FlatList
@@ -264,6 +296,7 @@ const styles = StyleSheet.create({
   detail: { fontSize: 15, fontWeight: '500', color: '#222', marginBottom: 4 },
   emptyText: { textAlign: 'center', marginTop: 50, fontSize: 16, color: '#888' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
   totalBar: {
     position: 'absolute',
     bottom: 0,
@@ -278,13 +311,34 @@ const styles = StyleSheet.create({
   },
   totalLabel: { color: '#fff', fontSize: 16, fontWeight: '600' },
   totalValue: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  mostSoldCard: {
+
+  toggleSoldBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    padding: 14,
+    borderRadius: 12,
+    elevation: 2,
+    marginBottom: 10,
+  },
+  toggleSoldText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#007bff',
+  },
+  soldProductsList: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  soldProductCard: {
     backgroundColor: '#fff',
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    marginBottom: 8,
+    padding: 12,
     borderRadius: 12,
+    marginBottom: 10,
     elevation: 2,
   },
   productImage: {
@@ -301,18 +355,12 @@ const styles = StyleSheet.create({
     color: '#aaa',
     fontSize: 12,
   },
-  mostSoldTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#555',
-  },
   mostSoldName: {
     fontSize: 16,
     fontWeight: '700',
     color: '#222',
   },
-  mostSoldQty: {
-    fontSize: 14,
+  soldProductDetails: {
     color: '#007bff',
     fontWeight: '600',
     marginTop: 4,
