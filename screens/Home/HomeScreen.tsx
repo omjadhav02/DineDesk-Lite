@@ -9,6 +9,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { getProfile } from '../../db/profile';
+import { TrialManager } from '../../utils/TrailManager';
 
 const HomeScreen = () => {
   const navigation = useNavigation();
@@ -17,19 +18,28 @@ const HomeScreen = () => {
   const [hasProfile, setHasProfile] = useState(false);
   const [adminName, setAdminName] = useState('');
   const [loading, setLoading] = useState(true);
+  const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
+
 
   const fetchProfile = async () => {
-    setLoading(true);
-    const profile = await getProfile();
-    if (profile) {
-      setHasProfile(true);
-      setAdminName(profile.adminName);
-    } else {
-      setHasProfile(false);
-      setAdminName('');
-    }
-    setLoading(false);
-  };
+  setLoading(true);
+
+  const profile = await getProfile();
+  if (profile) {
+    setHasProfile(true);
+    setAdminName(profile.adminName);
+  } else {
+    setHasProfile(false);
+    setAdminName('');
+  }
+
+  const minutes = await TrialManager.getTrialDaysLeft();
+  setTrialDaysLeft(minutes);
+
+
+  setLoading(false);
+};
+
 
   useEffect(() => {
     if (hasProfile) {
@@ -133,6 +143,15 @@ const HomeScreen = () => {
         <Text style={styles.tip}>
           Tap the profile icon above to access Admin Panel and Settings
         </Text>
+
+        {trialDaysLeft !== null && trialDaysLeft <= 7 && (
+          <Text style={styles.trialMessage}>
+            ⏳ Trial ends in {trialDaysLeft} {trialDaysLeft === 1 ? 'day' : 'days'}
+          </Text>
+        )}
+
+
+
       </View>
     </View>
   );
@@ -235,4 +254,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
+  trialMessage: {
+    fontSize: 16,
+    color: '#dc3545',
+    marginTop: 8,
+    fontWeight: 'bold',
+  },
+
 });

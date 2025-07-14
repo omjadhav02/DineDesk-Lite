@@ -2,12 +2,10 @@ import React, { useEffect, useState } from "react";
 import {
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 import {
   NavigationContainer,
-  useNavigation,
 } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -35,9 +33,15 @@ import AllTimesSalesScreen from "../screens/Sales/AllTimesSalesScreen";
 import AdminScreen from "../screens/Home/AdminScreen";
 import ProfileScreen from "../screens/Home/ProfileScreen";
 import EditProfile from "../screens/Home/EditProfile";
+import TrialExpiredScreen from "../screens/Trial/TrialExpiredScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator<RootStackParamList>();
+
+type AppNavigatorProps = {
+  isAllowed: boolean;
+  onActivate: () => void;
+};
 
 const BottomTabNavigator = () => {
   const { orderCount } = useOrderCount();
@@ -92,7 +96,6 @@ const BottomTabNavigator = () => {
   );
 };
 
-
 function OrderInitializer() {
   const { setOrderCount } = useOrderCount();
   const [ready, setReady] = useState(false);
@@ -110,60 +113,45 @@ function OrderInitializer() {
 
   return (
     <SelectedItemsProvider>
-      <NavigationContainer key="ready">
-        <Stack.Navigator>
-          <Stack.Screen
-            name="Main"
-            component={BottomTabNavigator}
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen name="AddProduct" component={AddProductScreen} />
-          <Stack.Screen name="ProductDetails" component={ProductDetails} />
-          <Stack.Screen name="Orders" component={OrderScreenWithHeader} />
-          <Stack.Screen name="RecentOrders" component={RecentOrders} />
-          <Stack.Screen name="Todays" component={TodaySalesScreen} />
-          <Stack.Screen name="Month" component={MonthSalesScreen} />
-          <Stack.Screen name="Year" component={YearSalesScreen} />
-          <Stack.Screen name="AllTime" component={AllTimesSalesScreen} />
-          <Stack.Screen name="Week" component={WeekSalesScreen} />
-          <Stack.Screen name="Admin" component={AdminScreen} />
-          <Stack.Screen name="Profile" component={ProfileScreen} />
-          <Stack.Screen name="EditProfile" component={EditProfile} />
-        </Stack.Navigator>
-      </NavigationContainer>
+      <BottomTabNavigator />
     </SelectedItemsProvider>
   );
 }
 
-export default function AppNavigator() {
+export default function AppNavigator({ isAllowed, onActivate }: AppNavigatorProps) {
   return (
     <OrderCountProvider>
-      <OrderInitializer />
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {isAllowed ? (
+            <>
+              <Stack.Screen name="Main" component={OrderInitializer} />
+              <Stack.Screen name="AddProduct" component={AddProductScreen} />
+              <Stack.Screen name="ProductDetails" component={ProductDetails} />
+              <Stack.Screen name="Orders" component={OrderScreenWithHeader} />
+              <Stack.Screen name="RecentOrders" component={RecentOrders} />
+              <Stack.Screen name="Todays" component={TodaySalesScreen} />
+              <Stack.Screen name="Month" component={MonthSalesScreen} />
+              <Stack.Screen name="Year" component={YearSalesScreen} />
+              <Stack.Screen name="AllTime" component={AllTimesSalesScreen} />
+              <Stack.Screen name="Week" component={WeekSalesScreen} />
+              <Stack.Screen name="Admin" component={AdminScreen} />
+              <Stack.Screen name="Profile" component={ProfileScreen} />
+              <Stack.Screen name="EditProfile" component={EditProfile} />
+            </>
+          ) : (
+            <Stack.Screen
+              name="TrialExpiredScreen"
+              children={() => <TrialExpiredScreen onActivate={onActivate} />}
+            />
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
     </OrderCountProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  headerButtonContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginRight: 16,
-  },
-  addButton: {
-    backgroundColor: "#007bff",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  addButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-    marginLeft: 6,
-  },
   tabBadge: {
     position: 'absolute',
     top: -4,

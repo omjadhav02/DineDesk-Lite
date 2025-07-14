@@ -18,5 +18,6 @@ export type RootStackParamList = {
     Admin: undefined;
     Profile: undefined;
     EditProfile: undefined;
+    TrialExpiredScreen: undefined;
 
 };
