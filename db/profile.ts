@@ -8,11 +8,14 @@ export const createProfileTable = async () => {
     // Set WAL mode first
     await db.execAsync(`PRAGMA journal_mode = WAL;`);
 
+    // await db.execAsync(`DROP TABLE IF EXISTS profile`);
+
     // Then create the table
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS profile (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         adminName TEXT NOT NULL,
+        restaurantName TEXT ,
         pin TEXT NOT NULL
       );
     `);
@@ -23,10 +26,10 @@ export const createProfileTable = async () => {
   }
 };
 
-export const insertProfile = async (adminName: string, pin: string): Promise<void> => {
+export const insertProfile = async (adminName: string, restaurantName: string, pin: string): Promise<void> => {
   try {
     const db = await getDb();
-    await db.runAsync(`INSERT INTO profile (adminName, pin) VALUES (?, ?)`, adminName, pin);
+    await db.runAsync(`INSERT INTO profile (adminName, restaurantName, pin) VALUES (?, ?, ?)`, adminName, restaurantName, pin);
     console.log('✅ Profile inserted');
   } catch (error: any) {
     console.error('❌ Error inserting profile:', error);
@@ -34,7 +37,7 @@ export const insertProfile = async (adminName: string, pin: string): Promise<voi
   }
 };
 
-export const getProfile = async (): Promise<{ adminName: string; pin: string } | null> => {
+export const getProfile = async (): Promise<{ adminName: string; restaurantName: string; pin: string } | null> => {
   try {
     const db = await getDb();
     const result = await db.getFirstAsync<any>('SELECT * FROM profile LIMIT 1');
@@ -56,10 +59,10 @@ export const deleteProfile = async (): Promise<void> => {
   }
 };
 
-export const updateProfile = async (adminName: string, pin: string): Promise<void> => {
+export const updateProfile = async (adminName: string, restaurantName: string, pin: string): Promise<void> => {
   try {
     const db = await getDb();
-    await db.runAsync(`UPDATE profile SET adminName = ?, pin = ?`, adminName, pin);
+    await db.runAsync(`UPDATE profile SET adminName = ?, restaurantName = ?, pin = ?`, adminName, restaurantName, pin);
     console.log('🔄 Profile updated!');
   } catch (error: any) {
     console.error('❌ Error updating profile:', error);

@@ -16,6 +16,7 @@ import { Product } from '../../types/Product';
 import { Ionicons } from '@expo/vector-icons';
 import { generateSingleDaySalesPDF } from '../../components/PDFGenerator';
 import * as Sharing from 'expo-sharing';
+import { getProfile } from '../../db/profile';
 
 type SoldProduct = {
   itemName: string;
@@ -30,6 +31,17 @@ const TodaySalesScreen = () => {
   const [totalTodayRevenue, setTotalTodayRevenue] = useState(0);
   const [soldProducts, setSoldProducts] = useState<SoldProduct[]>([]);
   const [showSoldProducts, setShowSoldProducts] = useState(false);
+  const [restaurantName, setRestaurantName] = useState('')
+
+    useEffect(() => {
+    const fetchProfile = async () => {
+      const profile = await getProfile();
+      if (profile?.restaurantName) {
+        setRestaurantName(profile.restaurantName);
+      }
+    };
+    fetchProfile();
+  }, []);
 
   const getStartOfToday = () => {
     const now = new Date();
@@ -101,7 +113,7 @@ const TodaySalesScreen = () => {
 
   const handleExportPDF = async () => {
     try {
-      const fileUri = await generateSingleDaySalesPDF(sales, 'Today Sales');
+      const fileUri = await generateSingleDaySalesPDF(sales, 'Today Sales',restaurantName);
       await Sharing.shareAsync(fileUri);
     } catch (error) {
       Alert.alert('Error', 'Failed to export sales PDF.');

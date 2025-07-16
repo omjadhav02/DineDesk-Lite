@@ -72,9 +72,14 @@ function ProductScreen() {
             <Text style={styles.price}>₹{item.price}</Text>
             {item.description ? <Text style={styles.description}>{item.description}</Text> : null}
           </View>
-          {item.imageUri ? (
-            <Image source={{ uri: item.imageUri }} style={styles.image} />
-          ) : null}
+          <Image
+            source={
+              item.imageUri && item.imageUri.trim() !== ''
+                ? { uri: item.imageUri }
+                : require('../../assets/no-image.png') // <- Add this line
+            }
+            style={styles.image}
+          />
         </View>
       </View>
     </TouchableOpacity>
@@ -164,4 +169,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#eee',
   },
+
+  imagePlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  placeholderText: {
+    fontSize: 12,
+    color: '#888',
+  },
+
 });

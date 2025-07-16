@@ -8,17 +8,28 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import { Order } from '../../types/Order';
 import { getAllOrders, deleteSingleOrder, deleteAllOrders } from '../../db/order';
 import { useOrderCount } from '../../context/OrderCountContext';
 import { insertSale } from '../../db/sales';
 import Toast from 'react-native-toast-message';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../types/navigation';
+
+
+type RecentOrdersNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'RecentOrders'
+>;
+
 
 const RecentOrders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const { setOrderCount } = useOrderCount();
+
+  const navigation = useNavigation<RecentOrdersNavigationProp>();
 
   // Load orders only when screen is focused
   useFocusEffect(
@@ -84,42 +95,54 @@ const RecentOrders = () => {
   };
 
   const renderItem = ({ item }: { item: Order }) => (
-    <View style={styles.card}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>🧾 Order #{item.orderNumber}</Text>
+    <TouchableOpacity onPress={() => navigation.navigate('Bill' ,{order:item})}>
+      <View style={styles.card}>
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>🧾 Order #{item.orderNumber}</Text>
 
-        <TouchableOpacity onPress={() => handleDeleteOrder(item.id)}>
-          <Ionicons name="trash-outline" size={22} color="#d11a2a" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.tableBadgeContainer}>
-        <Text style={styles.tableBadgeText}>🍽 Table #{item.tableNumber ?? 'N/A'}</Text>
-      </View>
-
-      {item.items.map((product, index) => (
-        <View key={index} style={styles.row}>
-          <Text style={styles.itemLeft}>
-            {index + 1}. {product.itemName} × {product.quantity}
-          </Text>
-          <Text style={styles.itemRight}>₹{product.price * product.quantity}</Text>
+          {/* <TouchableOpacity onPress={() => handleDeleteOrder(item.id)}>
+            <Ionicons name="trash-outline" size={22} color="#d11a2a" />
+          </TouchableOpacity> */}
         </View>
-      ))}
 
-      <View style={styles.divider} />
+        <View style={styles.tableBadgeContainer}>
+          <Text style={styles.tableBadgeText}>🍽 Table #{item.tableNumber ?? 'N/A'}</Text>
+        </View>
 
-      <View style={styles.summaryRow}>
-        <Text style={styles.summaryLeft}>Total Items: {item.totalItems}</Text>
-        <Text style={styles.summaryRight}>Total Price: ₹{item.totalPrice}</Text>
+        {item.items.map((product, index) => (
+          <View key={index} style={styles.row}>
+            <Text style={styles.itemLeft}>
+              {index + 1}. {product.itemName} × {product.quantity}
+            </Text>
+            <Text style={styles.itemRight}>₹{product.price * product.quantity}</Text>
+          </View>
+        ))}
+
+        <View style={styles.divider} />
+
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLeft}>Total Items: {item.totalItems}</Text>
+          <Text style={styles.summaryRight}>Total Price: ₹{item.totalPrice}</Text>
+        </View>
+
+        {/* <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[styles.saveBtn, { marginRight: 10 }]}
+            onPress={() => handleSaveOrder(item)}
+          >
+            <Text style={styles.saveBtnText}>Save</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.saveBtn}
+            onPress={() => navigation.navigate('SendBill' ,{order: item})}
+          >
+            <Text style={styles.saveBtnText}>Send Bill</Text>
+          </TouchableOpacity>
+        </View> */}
+
       </View>
-
-      <TouchableOpacity
-        style={styles.saveBtn}
-        onPress={() => handleSaveOrder(item)}
-      >
-        <Text style={styles.saveBtnText}>Save</Text>
-      </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -141,94 +164,108 @@ export default RecentOrders;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f5f5f5',
   },
   list: {
     padding: 16,
     paddingBottom: 30,
   },
+  card: {
+    backgroundColor: '#ffffff',
+    padding: 12,
+    marginBottom: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
-  },
-  card: {
-    backgroundColor: '#fff',
-    padding: 14,
-    marginBottom: 14,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 5,
+    marginBottom: 4,
   },
   title: {
-    fontWeight: 'bold',
-    fontSize: 17,
-    marginBottom: 6,
-    color: '#000',
+    fontWeight: '600',
+    fontSize: 16,
+    color: '#333',
   },
   tableBadgeContainer: {
     backgroundColor: '#007f5f',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 20,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 14,
     alignSelf: 'flex-start',
+    marginTop: 6,
     marginBottom: 10,
   },
   tableBadgeText: {
     color: 'white',
-    fontWeight: '700',
-    fontSize: 18,
+    fontWeight: '500',
+    fontSize: 14,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    alignItems: 'center',
+    paddingVertical: 2,
   },
   itemLeft: {
-    fontSize: 15,
-    color: '#333',
+    fontSize: 14,
+    color: '#444',
     flex: 1,
   },
   itemRight: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
     color: '#000',
+    marginLeft: 8,
   },
   divider: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-    marginVertical: 10,
+    height: 1,
+    backgroundColor: '#ddd',
+    marginVertical: 8,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    alignItems: 'center',
+    marginBottom: 4,
   },
   summaryLeft: {
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#333',
-    fontSize: 16,
+    fontSize: 14,
   },
   summaryRight: {
     fontWeight: '600',
     color: '#000',
-    fontSize: 16,
+    fontSize: 14,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
   },
   saveBtn: {
     backgroundColor: '#007f5f',
-    paddingVertical: 8,
-    paddingHorizontal: 35,
-    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 20,
+    borderRadius: 8,
     alignSelf: 'flex-start',
-    marginTop: 8,
+  },
+  sendBillBtn: {
+    alignSelf: 'flex-end',
   },
   saveBtnText: {
     color: 'white',
-    fontWeight: '600',
-    fontSize: 15,
+    fontWeight: '500',
+    fontSize: 14,
   },
   timestamp: {
     fontSize: 12,
@@ -243,3 +280,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+

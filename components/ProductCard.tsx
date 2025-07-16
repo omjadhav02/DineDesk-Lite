@@ -6,7 +6,15 @@ const ProductCard = React.memo(
   ({ item, onChange }: { item: any; onChange: (delta: number) => void }) => {
     return (
       <View style={styles.card}>
-        <Image source={{ uri: item.imageUri }} style={styles.image} />
+        <Image
+          source={
+            item.imageUri && item.imageUri.trim() !== ''
+              ? { uri: item.imageUri }
+              : require('../assets/no-image.png') // change path if needed
+          }
+          style={styles.image}
+        />
+
         <Text style={styles.name}>{item.itemName}</Text>
         <Text style={styles.price}>₹{item.price}</Text>
 

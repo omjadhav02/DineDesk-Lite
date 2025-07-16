@@ -19,6 +19,7 @@ import {
   generateWeeklySalesPDF,
 } from '../../components/PDFGenerator';
 import * as Sharing from 'expo-sharing';
+import { getProfile } from '../../db/profile';
 
 type DailySummary = {
   date: string;
@@ -44,6 +45,18 @@ const WeekSalesScreen = () => {
   const [mostSold, setMostSold] = useState<SoldProduct | null>(null);
   const [soldProducts, setSoldProducts] = useState<SoldProduct[]>([]);
   const [showSoldProducts, setShowSoldProducts] = useState(false);
+
+  const [restaurantName, setRestaurantName] = useState('')
+  
+      useEffect(() => {
+      const fetchProfile = async () => {
+        const profile = await getProfile();
+        if (profile?.restaurantName) {
+          setRestaurantName(profile.restaurantName);
+        }
+      };
+      fetchProfile();
+    }, []);
 
   const now = new Date();
 
@@ -72,7 +85,7 @@ const WeekSalesScreen = () => {
 
   const handleExportPDF = async () => {
     try {
-      const fileUri = await generateWeeklySalesPDF(weeklySales, weekLabel);
+      const fileUri = await generateWeeklySalesPDF(weeklySales, weekLabel,restaurantName);
       await Sharing.shareAsync(fileUri);
     } catch (error) {
       Alert.alert('Error', 'Failed to export weekly sales.');
@@ -81,7 +94,7 @@ const WeekSalesScreen = () => {
 
   const handleDayExportPDF = async (sales: Sale[], label: string) => {
     try {
-      const fileUri = await generateSingleDaySalesPDF(sales, label);
+      const fileUri = await generateSingleDaySalesPDF(sales, label,restaurantName);
       await Sharing.shareAsync(fileUri);
     } catch (error) {
       Alert.alert('Error', 'Failed to export daily sales.');

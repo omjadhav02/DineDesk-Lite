@@ -1,3 +1,4 @@
+import { Order } from "./Order";
 import { Product } from "./Product";
 
 export type RootStackParamList = {
@@ -9,7 +10,7 @@ export type RootStackParamList = {
     ProductDetails: { product: Product };
     RecentOrders: undefined;
     Tables: undefined;
-    Orders: { tableNumber: number };
+    Orders: { tableNumber: number, existingOrder?: Order };
     Todays: undefined;
     Month: undefined;
     Year: undefined;
@@ -19,5 +20,12 @@ export type RootStackParamList = {
     Profile: undefined;
     EditProfile: undefined;
     TrialExpiredScreen: undefined;
+    Profits: undefined;
+    TodayProfit: undefined;
+    WeekProfit: undefined;
+    MonthProfit: undefined;
+    YearProfit: undefined;
+    SendBill: {order: Order};
+    Bill: {order: Order};
 
 };

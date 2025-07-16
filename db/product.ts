@@ -1,7 +1,6 @@
 // 📁 db/product.ts
 import * as SQLite from 'expo-sqlite';
 import { Product } from '../types/Product';
-
 import { getDb } from './shared';
 
 export async function createProductTable(): Promise<void> {
@@ -30,7 +29,7 @@ export async function insertProduct(product: Product): Promise<void> {
     product.itemName,
     product.price,
     product.description ?? '',
-    product.imageUri ?? ''
+    product.imageUri?.trim() || null
   );
 }
 
@@ -42,7 +41,7 @@ export async function updateProduct(product: Product): Promise<void> {
     product.itemName,
     product.price,
     product.description ?? '',
-    product.imageUri ?? '',
+    product.imageUri?.trim() || null,
     product.id
   );
 }
@@ -67,4 +66,10 @@ export async function getAllProducts(): Promise<Product[]> {
 export async function deleteAllProducts(): Promise<void> {
   const db = await getDb();
   await db.runAsync('DELETE FROM products');
+}
+
+// Optional: Call this once during startup or upgrade to fix existing bad data
+export async function sanitizeProductImages(): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE products SET imageUri = NULL WHERE TRIM(imageUri) = '';`);
 }

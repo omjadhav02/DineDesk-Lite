@@ -15,6 +15,7 @@ import Toast from 'react-native-toast-message';
 const EditProfile = () => {
   const navigation = useNavigation();
   const [adminName, setAdminName] = useState('');
+  const [restaurantName, setRestaurantName] = useState('');
   const [pin, setPin] = useState('');
 
   useEffect(() => {
@@ -22,6 +23,7 @@ const EditProfile = () => {
       const result = await getProfile();
       if (result) {
         setAdminName(result.adminName);
+        setRestaurantName(result.restaurantName);
         setPin(result.pin);
       }
     };
@@ -29,7 +31,7 @@ const EditProfile = () => {
   }, []);
 
   const handleUpdate = async () => {
-    if (!adminName || !pin) {
+    if (!adminName || !pin || !restaurantName) {
       Alert.alert('All fields are required');
       return;
     }
@@ -42,7 +44,7 @@ const EditProfile = () => {
     }
 
     try {
-      await updateProfile(adminName, pin);
+      await updateProfile(adminName, restaurantName, pin);
       Toast.show({
         type: 'success',
         text1: 'Profile updated successfully!',
@@ -66,6 +68,14 @@ const EditProfile = () => {
           value={adminName}
           onChangeText={setAdminName}
         />
+
+         <TextInput
+            style={styles.input}
+            placeholder="Restaurant Name"
+            placeholderTextColor="#999"
+            value={restaurantName}
+            onChangeText={setRestaurantName}
+          />
 
         <TextInput
           style={styles.input}

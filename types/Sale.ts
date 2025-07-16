@@ -11,6 +11,7 @@ export type Sale = {
   totalPrice: number;
   timestamp: string;
   tableNumber?: number | null;
+  totalCost:number;
 };
 
 export type MonthlySummary = {

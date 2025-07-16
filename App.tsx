@@ -8,9 +8,14 @@ import { createSalesTable } from './db/sales';
 import { createProfileTable } from './db/profile';
 import { TrialManager } from './utils/TrailManager';
 import AppNavigator from './navigation/AppNavigator'; // updated to take isAllowed and onActivate props
+import { SalesModeProvider } from './context/SalesModeContext'; // ✅ Import the provider
 
 export default function App() {
-  return <OrderCountProviderWrapper />;
+  return (
+    <SalesModeProvider>
+      <OrderCountProviderWrapper />
+    </SalesModeProvider>
+  );
 }
 
 type AppNavigatorProps = {
@@ -51,7 +56,7 @@ function OrderCountProviderWrapper() {
       {isAllowed !== null && (
         <AppNavigator
           isAllowed={isAllowed}
-          onActivate={() => setIsAllowed(true)} // callback for activation from TrialExpiredScreen
+          onActivate={() => setIsAllowed(true)}
         />
       )}
       <Toast config={toastConfig} />
@@ -65,9 +70,10 @@ function Initializer({ setIsAllowed }: { setIsAllowed: (allowed: boolean) => voi
   useEffect(() => {
     const setup = async () => {
       try {
-        // await TrialManager.resetTrial() // Uncomment if you want to reset trial for testing
+        // await TrialManager.resetTrial()
         await createProfileTable();
         await createProductTable();
+        // await addCostColumnIfNotExists();
         await createOrderTable();
         await createSalesTable();
 

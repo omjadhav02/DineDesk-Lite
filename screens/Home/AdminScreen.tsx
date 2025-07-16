@@ -1,3 +1,4 @@
+// 📁 AdminScreen.tsx
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -16,23 +17,27 @@ import { deleteAllProducts } from '../../db/product';
 import { deleteAllOrders, resetOrderNumbers } from '../../db/order';
 import { deleteAllSales } from '../../db/sales';
 
+// Define profile type
 type Profile = {
   adminName: string;
+  restaurantName: string;
   pin: string;
 };
+
+type DeleteType = 'products' | 'orders' | 'sales' | 'edit' | null;
 
 const AdminScreen = () => {
   const navigation = useNavigation();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [enteredPin, setEnteredPin] = useState('');
-  const [deleteAction, setDeleteAction] = useState<'products' | 'orders' | 'sales' | null>(null);
+  const [deleteAction, setDeleteAction] = useState<DeleteType>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
         const result = await getProfile();
-        if (result) setProfile(result as Profile);
+        if (result) setProfile(result);
       } catch (error) {
         console.error('Failed to load profile', error);
       }
@@ -44,13 +49,12 @@ const AdminScreen = () => {
     try {
       await resetOrderNumbers();
       Alert.alert('✅ Success', 'Orders deleted and order numbers reset.');
-      // You may refresh UI or state if needed here
     } catch (error) {
       Alert.alert('❌ Failed', 'Could not reset order numbers');
     }
   };
 
-  const handleRequestDelete = (type: 'products' | 'orders' | 'sales') => {
+  const handleRequestDelete = (type: DeleteType) => {
     setDeleteAction(type);
     setEnteredPin('');
     setPinModalVisible(true);
@@ -58,7 +62,6 @@ const AdminScreen = () => {
 
   const handleDeleteConfirmed = async () => {
     if (!profile) return;
-
     if (enteredPin !== profile.pin) {
       Alert.alert('Incorrect PIN', 'Please enter the correct 4-digit PIN');
       return;
@@ -78,18 +81,24 @@ const AdminScreen = () => {
           await deleteAllSales();
           Alert.alert('✅ All sales deleted');
           break;
+        case 'edit':
+          setPinModalVisible(false);
+          navigation.navigate('EditProfile' as never);
+          return;
       }
     } catch (err) {
-      Alert.alert('❌ Failed to delete');
+      Alert.alert('❌ Failed to perform action');
     } finally {
-      setPinModalVisible(false);
+      if (deleteAction !== 'edit') {
+        setPinModalVisible(false);
+      }
       setDeleteAction(null);
       setEnteredPin('');
     }
   };
 
   const handleEditProfile = () => {
-    navigation.navigate('EditProfile' as never);
+    handleRequestDelete('edit');
   };
 
   return (
@@ -101,6 +110,8 @@ const AdminScreen = () => {
           </TouchableOpacity>
           <Text style={styles.profileLabel}>Admin Name</Text>
           <Text style={styles.profileValue}>{profile.adminName}</Text>
+          <Text style={styles.profileLabel}>Restaurant Name</Text>
+          <Text style={styles.profileValue}>{profile.restaurantName}</Text>
         </View>
       )}
 

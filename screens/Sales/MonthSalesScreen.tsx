@@ -16,6 +16,7 @@ import { Product } from '../../types/Product';
 import { Ionicons } from '@expo/vector-icons';
 import { generateMonthlySalesPDF, generateSingleDaySalesPDF } from '../../components/PDFGenerator';
 import * as Sharing from 'expo-sharing';
+import { getProfile } from '../../db/profile';
 
 type DailySummary = {
   date: string;
@@ -41,6 +42,18 @@ const MonthlySalesScreen = () => {
   const [soldProducts, setSoldProducts] = useState<SoldProduct[]>([]);
   const [showSoldProducts, setShowSoldProducts] = useState(false);
 
+  const [restaurantName, setRestaurantName] = useState('')
+  
+      useEffect(() => {
+      const fetchProfile = async () => {
+        const profile = await getProfile();
+        if (profile?.restaurantName) {
+          setRestaurantName(profile.restaurantName);
+        }
+      };
+      fetchProfile();
+    }, []);
+
   const now = new Date();
   const currentMonthLabel = now.toLocaleString('default', {
     month: 'long',
@@ -49,7 +62,7 @@ const MonthlySalesScreen = () => {
 
   const handleExportPDF = async () => {
     try {
-      const fileUri = await generateMonthlySalesPDF(monthlySales, currentMonthLabel);
+      const fileUri = await generateMonthlySalesPDF(monthlySales, currentMonthLabel,restaurantName);
       await Sharing.shareAsync(fileUri);
     } catch (error) {
       Alert.alert('Error', 'Failed to export monthly sales.');
@@ -58,7 +71,7 @@ const MonthlySalesScreen = () => {
 
   const handleDayExportPDF = async (sales: Sale[], label: string) => {
     try {
-      const fileUri = await generateSingleDaySalesPDF(sales, label);
+      const fileUri = await generateSingleDaySalesPDF(sales, label,restaurantName);
       await Sharing.shareAsync(fileUri);
     } catch (error) {
       Alert.alert('Error', 'Failed to export daily sales.');

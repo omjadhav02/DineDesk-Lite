@@ -18,6 +18,7 @@ const ProfileScreen = () => {
   const navigation = useNavigation();
 
   const [adminName, setAdminName] = useState('');
+  const [restaurantName, setRestaurantName] = useState('');
   const [pin, setPin] = useState('');
   const [profileExists, setProfileExists] = useState(false);
 
@@ -32,7 +33,7 @@ const ProfileScreen = () => {
   }, []);
 
   const handleCreateProfile = async () => {
-    if (!adminName || !pin) {
+    if (!adminName || !pin || !restaurantName) {
       Alert.alert('All fields are required');
       return;
     }
@@ -43,7 +44,7 @@ const ProfileScreen = () => {
     }
 
     try {
-      await insertProfile(adminName, pin);
+      await insertProfile(adminName, restaurantName, pin);
       Toast.show({
         type: 'success',
         text1: 'Profile created!',
@@ -81,6 +82,14 @@ const ProfileScreen = () => {
                 placeholderTextColor="#999"
                 value={adminName}
                 onChangeText={setAdminName}
+              />
+
+              <TextInput
+                style={styles.input}
+                placeholder="Restaurant Name"
+                placeholderTextColor="#999"
+                value={restaurantName}
+                onChangeText={setRestaurantName}
               />
 
               <TextInput

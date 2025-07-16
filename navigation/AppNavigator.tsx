@@ -34,14 +34,21 @@ import AdminScreen from "../screens/Home/AdminScreen";
 import ProfileScreen from "../screens/Home/ProfileScreen";
 import EditProfile from "../screens/Home/EditProfile";
 import TrialExpiredScreen from "../screens/Trial/TrialExpiredScreen";
-
-const Tab = createBottomTabNavigator();
-const Stack = createNativeStackNavigator<RootStackParamList>();
+import TodayProfitScreen from "../screens/Profits/TodayProfitScreen";
+import WeekProfitScreen from "../screens/Profits/WeekProfitScreen";
+import MonthProfitScreen from "../screens/Profits/MonthProfitScreen";
+import YearProfitScreen from "../screens/Profits/YearProfitScreen";
+// import SendBill from "../screens/Orders/SendBill";
+// import OrderBill from "../screens/Orders/Bill";
+import Bill from "../screens/Orders/Bill";
 
 type AppNavigatorProps = {
   isAllowed: boolean;
   onActivate: () => void;
 };
+
+const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const BottomTabNavigator = () => {
   const { orderCount } = useOrderCount();
@@ -112,41 +119,54 @@ function OrderInitializer() {
   if (!ready) return null;
 
   return (
-    <SelectedItemsProvider>
-      <BottomTabNavigator />
-    </SelectedItemsProvider>
+    <NavigationContainer key="ready">
+      <SelectedItemsProvider>
+        <Stack.Navigator>
+          <Stack.Screen
+            name="Main"
+            component={BottomTabNavigator}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen name="AddProduct" component={AddProductScreen} />
+          <Stack.Screen name="ProductDetails" component={ProductDetails} />
+          <Stack.Screen name="Orders" component={OrderScreenWithHeader} />
+          <Stack.Screen name="RecentOrders" component={RecentOrders} />
+          <Stack.Screen name="Todays" component={TodaySalesScreen} />
+          <Stack.Screen name="Month" component={MonthSalesScreen} />
+          <Stack.Screen name="Year" component={YearSalesScreen} />
+          <Stack.Screen name="AllTime" component={AllTimesSalesScreen} />
+          <Stack.Screen name="Week" component={WeekSalesScreen} />
+          <Stack.Screen name="Admin" component={AdminScreen} />
+          <Stack.Screen name="Profile" component={ProfileScreen} />
+          <Stack.Screen name="EditProfile" component={EditProfile} />
+          <Stack.Screen name="Profits" component={ProfileScreen} />
+          <Stack.Screen name="TodayProfit" component={TodayProfitScreen} />
+          <Stack.Screen name="WeekProfit" component={WeekProfitScreen} />
+          <Stack.Screen name="MonthProfit" component={MonthProfitScreen} />
+          <Stack.Screen name="YearProfit" component={YearProfitScreen} />
+          <Stack.Screen name="Bill" component={Bill} />
+        </Stack.Navigator>
+      </SelectedItemsProvider>
+    </NavigationContainer>
   );
 }
 
 export default function AppNavigator({ isAllowed, onActivate }: AppNavigatorProps) {
   return (
     <OrderCountProvider>
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {isAllowed ? (
-            <>
-              <Stack.Screen name="Main" component={OrderInitializer} />
-              <Stack.Screen name="AddProduct" component={AddProductScreen} />
-              <Stack.Screen name="ProductDetails" component={ProductDetails} />
-              <Stack.Screen name="Orders" component={OrderScreenWithHeader} />
-              <Stack.Screen name="RecentOrders" component={RecentOrders} />
-              <Stack.Screen name="Todays" component={TodaySalesScreen} />
-              <Stack.Screen name="Month" component={MonthSalesScreen} />
-              <Stack.Screen name="Year" component={YearSalesScreen} />
-              <Stack.Screen name="AllTime" component={AllTimesSalesScreen} />
-              <Stack.Screen name="Week" component={WeekSalesScreen} />
-              <Stack.Screen name="Admin" component={AdminScreen} />
-              <Stack.Screen name="Profile" component={ProfileScreen} />
-              <Stack.Screen name="EditProfile" component={EditProfile} />
-            </>
-          ) : (
-            <Stack.Screen
-              name="TrialExpiredScreen"
-              children={() => <TrialExpiredScreen onActivate={onActivate} />}
-            />
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
+      {!isAllowed ? (
+        <NavigationContainer>
+          <SelectedItemsProvider>
+            <Stack.Navigator>
+              <Stack.Screen name="TrialExpiredScreen" options={{ headerShown: false }}>
+                {() => <TrialExpiredScreen onActivate={onActivate} />}
+              </Stack.Screen>
+            </Stack.Navigator>
+          </SelectedItemsProvider>
+        </NavigationContainer>
+      ) : (
+        <OrderInitializer />
+      )}
     </OrderCountProvider>
   );
 }

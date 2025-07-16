@@ -16,6 +16,7 @@ import { Product } from '../../types/Product';
 import { Ionicons } from '@expo/vector-icons';
 import { generateYearlySalesPDF, generateMonthlySalesPDF } from '../../components/PDFGenerator';
 import * as Sharing from 'expo-sharing';
+import { getProfile } from '../../db/profile';
 
 type SoldProduct = {
   itemName: string;
@@ -32,6 +33,19 @@ const YearSalesScreen = () => {
   const [soldProducts, setSoldProducts] = useState<SoldProduct[]>([]);
   const [showSoldProducts, setShowSoldProducts] = useState(false);
 
+  const [restaurantName, setRestaurantName] = useState('')
+  
+      useEffect(() => {
+      const fetchProfile = async () => {
+        const profile = await getProfile();
+        if (profile?.restaurantName) {
+          setRestaurantName(profile.restaurantName);
+        }
+      };
+      fetchProfile();
+    }, []);
+  
+
   const now = new Date();
   const startOfRange = new Date(now);
   startOfRange.setMonth(startOfRange.getMonth() - 11);
@@ -41,7 +55,7 @@ const YearSalesScreen = () => {
   const handleExportPDF = async () => {
     try {
       const label = `${startOfRange.toLocaleString('default', { month: 'short' })} ${startOfRange.getFullYear()} - ${now.toLocaleString('default', { month: 'short' })} ${now.getFullYear()}`;
-      const fileUri = await generateYearlySalesPDF(monthlySummaries, label);
+      const fileUri = await generateYearlySalesPDF(monthlySummaries, label,restaurantName);
       await Sharing.shareAsync(fileUri);
     } catch (error) {
       Alert.alert('Error', 'Failed to export yearly sales.');
@@ -59,7 +73,7 @@ const YearSalesScreen = () => {
     });
 
     try {
-      const fileUri = await generateMonthlySalesPDF(salesOfMonth, monthLabel);
+      const fileUri = await generateMonthlySalesPDF(salesOfMonth, monthLabel,restaurantName);
       await Sharing.shareAsync(fileUri);
     } catch (error) {
       Alert.alert('Error', 'Failed to export monthly sales.');
