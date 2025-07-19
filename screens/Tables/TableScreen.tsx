@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 import {
@@ -15,36 +15,43 @@ import {
   insertTable,
   getAllTables,
   deleteSingleTable,
-  deleteAllTables,
 } from '../../db/table';
 import { getAllOrders } from '../../db/order';
 import { RootStackParamList } from '../../types/navigation';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Order } from '../../types/Order';
 
-type NavProp = NativeStackNavigationProp<RootStackParamList, 'Orders'>;
+type NavProp = NativeStackNavigationProp<RootStackParamList, 'Orders' | 'Bill'>;
 
 const TableScreen = () => {
   const navigation = useNavigation<NavProp>();
   const [tables, setTables] = useState<{ id: number; tableNumber: number }[]>([]);
-  const [tableOrders, setTableOrders] = useState<Record<number, number>>({});
+  const [tableOrders, setTableOrders] = useState<Record<number, Order>>({});
 
   useEffect(() => {
     const init = async () => {
       await createTableTable();
       const data = await getAllTables();
       setTables(data);
-      updateOrderMap();
+      await updateOrderMap();
     };
 
     init();
   }, []);
 
+  // Reload orders when screen is focused (comes into view)
+  useFocusEffect(
+    useCallback(() => {
+      updateOrderMap();
+    }, [])
+  );
+
   const updateOrderMap = async () => {
     const orders = await getAllOrders();
-    const orderMap: Record<number, number> = {};
+    const orderMap: Record<number, Order> = {};
     orders.forEach((order) => {
       if (order.tableNumber != null) {
-        orderMap[order.tableNumber] = order.totalPrice;
+        orderMap[order.tableNumber] = order;
       }
     });
     setTableOrders(orderMap);
@@ -90,7 +97,13 @@ const TableScreen = () => {
   };
 
   const navigateToOrder = (tableNumber: number) => {
-    navigation.navigate('Orders', { tableNumber });
+    const order = tableOrders[tableNumber];
+
+    if (order) {
+      navigation.navigate('Bill', { order });
+    } else {
+      navigation.navigate('Orders', { tableNumber });
+    }
   };
 
   return (
@@ -101,14 +114,15 @@ const TableScreen = () => {
         numColumns={2}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => {
-          const isOccupied = tableOrders[item.tableNumber] != null;
-          const totalPrice = tableOrders[item.tableNumber];
+          const order = tableOrders[item.tableNumber];
+          const isOccupied = order != null;
+          const totalPrice = order?.totalPrice ?? 0;
 
           return (
             <TouchableOpacity
               style={[
                 styles.card,
-                isOccupied && { backgroundColor: '#ffe5e5' }, // red tint
+                isOccupied && { backgroundColor: '#ffe5e5' },
               ]}
               onPress={() => navigateToOrder(item.tableNumber)}
               onLongPress={() => removeTable(item.id)}
@@ -128,7 +142,6 @@ const TableScreen = () => {
         }
       />
 
-      {/* FAB to Add Table */}
       <TouchableOpacity style={styles.fab} onPress={addTable}>
         <Ionicons name="add" size={26} color="#fff" />
       </TouchableOpacity>
