@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -35,11 +35,9 @@ const TableScreen = () => {
       setTables(data);
       await updateOrderMap();
     };
-
     init();
   }, []);
 
-  // Reload orders when screen is focused (comes into view)
   useFocusEffect(
     useCallback(() => {
       updateOrderMap();
@@ -81,7 +79,7 @@ const TableScreen = () => {
     }
   };
 
-  const removeTable = (id: number) => {
+  const removeTable = useCallback((id: number) => {
     Alert.alert('Delete Table', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -94,17 +92,38 @@ const TableScreen = () => {
         },
       },
     ]);
-  };
+  }, []);
 
-  const navigateToOrder = (tableNumber: number) => {
+  const navigateToOrder = useCallback((tableNumber: number) => {
     const order = tableOrders[tableNumber];
-
     if (order) {
       navigation.navigate('Bill', { order });
     } else {
       navigation.navigate('Orders', { tableNumber });
     }
-  };
+  }, [tableOrders]);
+
+  const renderItem = useCallback(({ item }: { item: { id: number; tableNumber: number } }) => {
+    const order = tableOrders[item.tableNumber];
+    const isOccupied = order != null;
+    const totalPrice = order?.totalPrice ?? 0;
+
+    return (
+      <TouchableOpacity
+        style={[styles.card, isOccupied && styles.cardOccupied]}
+        onPress={() => navigateToOrder(item.tableNumber)}
+        onLongPress={() => removeTable(item.id)}
+      >
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{item.tableNumber}</Text>
+        </View>
+        <Text style={styles.cardLabel}>Table</Text>
+        {isOccupied && (
+          <Text style={styles.priceLabel}>₹{totalPrice}</Text>
+        )}
+      </TouchableOpacity>
+    );
+  }, [tableOrders]);
 
   return (
     <View style={styles.container}>
@@ -113,33 +132,14 @@ const TableScreen = () => {
         keyExtractor={(item) => item.id.toString()}
         numColumns={2}
         contentContainerStyle={styles.list}
-        renderItem={({ item }) => {
-          const order = tableOrders[item.tableNumber];
-          const isOccupied = order != null;
-          const totalPrice = order?.totalPrice ?? 0;
-
-          return (
-            <TouchableOpacity
-              style={[
-                styles.card,
-                isOccupied && { backgroundColor: '#ffe5e5' },
-              ]}
-              onPress={() => navigateToOrder(item.tableNumber)}
-              onLongPress={() => removeTable(item.id)}
-            >
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{item.tableNumber}</Text>
-              </View>
-              <Text style={styles.cardLabel}>Table</Text>
-              {isOccupied && (
-                <Text style={styles.priceLabel}>₹{totalPrice}</Text>
-              )}
-            </TouchableOpacity>
-          );
-        }}
+        renderItem={renderItem}
         ListEmptyComponent={
           <Text style={styles.emptyText}>No tables added yet.</Text>
         }
+        removeClippedSubviews
+        initialNumToRender={6}
+        maxToRenderPerBatch={10}
+        windowSize={7}
       />
 
       <TouchableOpacity style={styles.fab} onPress={addTable}>
@@ -173,6 +173,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 6,
+  },
+  cardOccupied: {
+    backgroundColor: '#ffe5e5',
   },
   avatar: {
     width: 60,
